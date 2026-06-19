@@ -27,8 +27,11 @@ abstract interface class ActionSink {
 /// Key-state ([downKeys]) is a set of Doom keycodes currently held. This is the
 /// data G_BuildTiccmd consumes in vanilla (gamekeydown[]). The EventQueue gets
 /// the discrete keyDown/keyUp events (used by the menu, weapon switch, etc.).
-class ActionDispatcher implements ActionSink {
-  ActionDispatcher(this.queue);
+///
+/// Named [EventQueueActionSink] (not "ActionDispatcher") to avoid clashing with
+/// Flutter's widgets `ActionDispatcher`.
+class EventQueueActionSink implements ActionSink {
+  EventQueueActionSink(this.queue);
 
   /// The foundation event queue that downstream Doom code drains per tic.
   final EventQueue queue;
