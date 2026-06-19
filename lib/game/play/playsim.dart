@@ -48,12 +48,18 @@ import 'thinker.dart';
 
 /// The play simulation for one game on one [World].
 class PlaySim {
-  PlaySim(this.world, {this.skill = Skill.medium}) {
+  PlaySim(this.world, {this.skill = Skill.medium, SoundHook? sound})
+      : _injectedSound = sound ?? const NullSoundHook() {
     _buildSubsystems();
   }
 
   final World world;
   Skill skill;
+
+  /// The SoundHook injected at construction (defaults to [NullSoundHook] so
+  /// tests stay headless). Stored so [_buildSubsystems] re-wires it on every
+  /// level change.
+  final SoundHook _injectedSound;
 
   // Level-dependent subsystems. These are rebuilt by [_buildSubsystems] both at
   // construction and after a [loadLevel] (G_DoLoadLevel), because they hold a
@@ -118,7 +124,7 @@ class PlaySim {
     // -------------------------------------------------------------------
     final int skyFlat = world.textures.checkFlatNumForName('F_SKY1');
 
-    sound = const NullSoundHook();
+    sound = _injectedSound;
     interactions = Interactions(mobjSim, sound);
     sight = Sight(world.level);
     shoot = Shoot(move, mobjSim, interactions, sound)

@@ -12,6 +12,7 @@
 // Per-frame (onRender): gs.render(fb) (D_Display: 3D view + HUD + menu) ->
 // fb.toImage(palette) -> VideoView.
 
+import 'dart:async';
 import 'dart:typed_data';
 import 'dart:ui' as ui;
 
@@ -20,6 +21,8 @@ import 'package:flutter/services.dart' show rootBundle;
 
 import '../engine/input/event.dart';
 import '../engine/render/renderer.dart';
+import '../engine/sound/audio_engine.dart';
+import '../engine/sound/sfx_sound_hook.dart';
 import '../engine/system/gameloop.dart';
 import '../engine/video/framebuffer.dart';
 import '../engine/video/palette.dart';
@@ -37,6 +40,7 @@ import 'integration/player_status_adapter.dart';
 import 'integration/psprite_adapter.dart';
 import 'integration/sprite_adapter.dart';
 import 'play/playsim.dart';
+import 'play/sounds.dart';
 import 'state/game_state.dart';
 import 'state/level_flow.dart';
 import 'world/world.dart';
@@ -63,6 +67,29 @@ class _DoomGameState extends State<DoomGame>
   KeyStateBridge? _keyBridge;
   GameLoop? _loop;
   ControlsSettingsStore? _store;
+  SfxSoundHook? _sfxHook;
+  AudioEngine? _audio;
+
+  // Common gameplay sounds to precache at boot (I_PrecacheSounds equivalent).
+  static const List<int> _precacheSfx = <int>[
+    Sfx.pistol,
+    Sfx.shotgn,
+    Sfx.sgcock,
+    Sfx.doropn,
+    Sfx.dorcls,
+    Sfx.swtchn,
+    Sfx.swtchx,
+    Sfx.itemup,
+    Sfx.wpnup,
+    Sfx.barexp,
+    Sfx.oof,
+    Sfx.posit1,
+    Sfx.popain,
+    Sfx.podth1,
+    Sfx.firsht,
+    Sfx.firxpl,
+    Sfx.telept,
+  ];
 
   KeyBindings _bindings = KeyBindings.defaults();
   OverlaySettings _overlay = const OverlaySettings();
@@ -99,8 +126,38 @@ class _DoomGameState extends State<DoomGame>
 
       final Palette palette = Palette.fromWad(wad);
 
-      // World + play simulation (boots into E1M1).
-      final PlaySim sim = PlaySim(World.fromWad(wad));
+      // ---------------------------------------------------------------------
+      // AUDIO: initialize the flutter_soloud backend and build the real
+      // SoundHook. If init fails (headless / CI / no audio device) we fall back
+      // to NullSoundHook and log — the game NEVER crashes on audio failure.
+      // The listener is the console player's mobj, read live via the closure.
+      // ---------------------------------------------------------------------
+      PlaySim? simRef; // captured by the listenerProvider closure.
+      SfxSoundHook? sfxHook;
+      final SoLoudAudioEngine audio = SoLoudAudioEngine();
+      _audio = audio;
+      final bool audioOk = await audio.init();
+      if (audioOk) {
+        sfxHook = SfxSoundHook(
+          wad: wad,
+          audio: audio,
+          listenerProvider: () => simRef?.player.mo,
+        );
+        _sfxHook = sfxHook;
+        // Precache the common gameplay sounds so the first trigger is instant
+        // (vanilla I_PrecacheSounds). Best-effort; failures are swallowed.
+        for (final int id in _precacheSfx) {
+          unawaited(_sfxHook!.precache(id));
+        }
+        debugPrint('[flu_doom] audio engine initialized; SFX enabled');
+      } else {
+        debugPrint('[flu_doom] audio init failed; SFX disabled (NullSoundHook)');
+      }
+
+      // World + play simulation (boots into E1M1). Inject the real SoundHook
+      // when audio is available; otherwise PlaySim defaults to NullSoundHook.
+      final PlaySim sim = PlaySim(World.fromWad(wad), sound: sfxHook);
+      simRef = sim;
       sim.spawnLevel();
 
       // Renderer + sprite adapters (world things + player weapon psprites).
@@ -240,6 +297,9 @@ class _DoomGameState extends State<DoomGame>
   void dispose() {
     _loop?.dispose();
     _frame?.dispose();
+    // Tear down the audio backend (no-op if it never initialized).
+    _sfxHook = null;
+    unawaited(_audio?.dispose() ?? Future<void>.value());
     super.dispose();
   }
 

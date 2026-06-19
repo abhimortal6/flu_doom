@@ -38,6 +38,12 @@ dependencies:
   # Persistence for input/controls settings (key bindings + overlay config).
   shared_preferences: ^2.3.2
 
+  # Low-latency game-audio backend for sound effects. Platform-channel plugin
+  # (engine logic stays pure Dart); supports in-memory WAV buffers (loadMem),
+  # many concurrent voices, and per-voice volume + stereo pan on
+  # macOS/iOS/Android. Used only by lib/engine/sound/audio_engine.dart.
+  flutter_soloud: ^4.0.9
+
 dev_dependencies:
   flutter_test:
     sdk: flutter
