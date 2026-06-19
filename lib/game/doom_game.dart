@@ -38,6 +38,7 @@ import 'integration/psprite_adapter.dart';
 import 'integration/sprite_adapter.dart';
 import 'play/playsim.dart';
 import 'state/game_state.dart';
+import 'state/level_flow.dart';
 import 'world/world.dart';
 
 const String kWadAsset = 'assets/doom1.wad';
@@ -98,25 +99,55 @@ class _DoomGameState extends State<DoomGame>
 
       final Palette palette = Palette.fromWad(wad);
 
-      // World + play simulation.
+      // World + play simulation (boots into E1M1).
       final PlaySim sim = PlaySim(World.fromWad(wad));
       sim.spawnLevel();
 
       // Renderer + sprite adapters (world things + player weapon psprites).
+      // The renderer reads world.level / sim.* live, so a level change (which
+      // swaps world.level + rebuilds sim's subsystems) re-points it with no
+      // re-wiring here.
       final Renderer renderer = Renderer(framebuffer: _fb, world: sim.world);
       final PlaySpriteAdapter sprites = PlaySpriteAdapter(sim, wad);
       // Share the built sprites[] resolver with the psprite adapter.
       final PlayPspriteAdapter psprites =
           PlayPspriteAdapter(sim, sprites.spriteResolver);
 
+      // Level-completion flow (g_game.c: G_ExitLevel/G_DoCompleted/...).
+      final LevelFlow flow = LevelFlow(
+        sim: sim,
+        mapExists: (String name) => wad.lumpNumForName(name) >= 0,
+      );
+
       // Game state (status bar / HUD / automap / menu) with injected adapters.
-      final GameState gs = GameState(GameStateConfig(
+      late final GameState gs;
+      gs = GameState(GameStateConfig(
         wad: wad,
         world: sim.world,
         playerStatus: PlayerStatusAdapter(sim.player),
         worldView: (Framebuffer fb) =>
             renderer.renderPlayerView(sprites, psprites),
+        // Intermission stats are built from the REAL finished level + player.
+        statsProvider: () => flow.buildStats(),
+        // Intermission done -> load the next map (or finale after E1M8).
+        onAdvanceLevel: () {
+          final String? loaded = flow.worldDone();
+          if (loaded == null) {
+            gs.triggerVictory(); // end of episode 1 -> finale
+          }
+        },
       ));
+
+      // Level-exit hooks (switch special 11 -> normal, 51 -> secret, boss
+      // death) -> G_ExitLevel/G_SecretExitLevel + defer ga_completed.
+      sim.onExitLevel = () {
+        flow.exitLevel();
+        gs.completeLevel();
+      };
+      sim.onSecretExitLevel = () {
+        flow.secretExitLevel();
+        gs.completeLevel();
+      };
       // Jump straight into the level (this milestone boots into E1M1 rather
       // than the title/demo screen).
       gs.enterLevel();

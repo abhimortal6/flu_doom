@@ -7,6 +7,11 @@
 //   - PlaySim(world)            : construct against a loaded World.
 //   - spawnLevel()              : P_SetupLevel-equivalent: spawn things + the
 //                                 player, attach sector specials, set viewpoint.
+//   - loadLevel(mapName)        : G_DoLoadLevel-equivalent: load a new map into
+//                                 the shared World, rebuild every level-dependent
+//                                 subsystem, then re-spawn the SAME player so its
+//                                 inventory carries (G_PlayerFinishLevel), and
+//                                 prime the viewpoint.
 //   - buildTiccmd(keys)         : fill world.cmd from KeyState (G_BuildTiccmd).
 //   - tic([cmd])                : advance one 35Hz tic (G_Ticker -> P_Ticker),
 //                                 applying world.cmd (or the supplied cmd) and
@@ -44,6 +49,56 @@ import 'thinker.dart';
 /// The play simulation for one game on one [World].
 class PlaySim {
   PlaySim(this.world, {this.skill = Skill.medium}) {
+    _buildSubsystems();
+  }
+
+  final World world;
+  Skill skill;
+
+  // Level-dependent subsystems. These are rebuilt by [_buildSubsystems] both at
+  // construction and after a [loadLevel] (G_DoLoadLevel), because they hold a
+  // reference to the specific [world.level] / thinker list of the active map.
+  late ThinkerList thinkers;
+  late MapMove move;
+  late MobjSim mobjSim;
+  late PlayerSim playerSim;
+  late Spawner spawner;
+  late DoorManager doors;
+  late SwitchManager switches;
+  late LightManager lights;
+  late PlaySpriteSource spriteSource;
+
+  // --- Combat subsystems (COMBAT-D). ---
+  late SoundHook sound;
+  late Interactions interactions;
+  late Sight sight;
+  late Shoot shoot;
+  late EnemyAi enemyAi;
+  late Pspr pspr;
+
+  /// Player 1. This instance PERSISTS across [loadLevel] so its inventory
+  /// (weapons/ammo/backpack) carries between maps (vanilla keeps players[] and
+  /// only applies G_PlayerFinishLevel on the old map + a partial reset on load).
+  final Player player = Player();
+
+  /// Level time in tics (vanilla `leveltime`).
+  int levelTime = 0;
+
+  /// Level-exit hooks (vanilla G_ExitLevel / G_SecretExitLevel). The integration
+  /// layer (LevelFlow) wires these to defer `ga_completed`. Until wired they are
+  /// safe no-ops so the play-sim never crashes on a stand-alone playtest.
+  void Function()? onExitLevel;
+  void Function()? onSecretExitLevel;
+
+  final TicCmdBuilder _cmdBuilder = TicCmdBuilder();
+
+  // -------------------------------------------------------------------------
+  // Build (or rebuild, after a level change) every level-dependent subsystem
+  // and re-wire the play-sim hooks. The [player] instance and [onExitLevel] /
+  // [onSecretExitLevel] hooks are NOT touched here — they survive a level
+  // change (G_DoLoadLevel rebuilds the map, not the player or the game flow).
+  // -------------------------------------------------------------------------
+  void _buildSubsystems() {
     thinkers = ThinkerList();
     move = MapMove(world.level);
     mobjSim = MobjSim(move, thinkers);
@@ -85,15 +140,18 @@ class PlaySim {
     doors = DoorManager(world.level, move, thinkers, shoot, switches, sound);
 
     // Register the real combat A_* bodies, then fill the rest with stubs.
+    // (putIfAbsent semantics: re-registering after a level change is a no-op.)
     final ActionRegistry reg = ActionRegistry.instance;
     registerEnemyActions(reg, enemyAi, shoot, interactions);
     registerWeaponActions(reg, pspr, shoot);
     reg.registerAllStubs();
 
-    // -------------------------------------------------------------------
-    // Wire the play-sim hooks that drive combat from the world layer.
-    // -------------------------------------------------------------------
-    // Player "use" action -> door manager (unchanged).
+    _wireHooks();
+  }
+
+  /// Wire the play-sim hooks that drive combat + specials from the world layer.
+  void _wireHooks() {
+    // Player "use" action -> door manager.
     playerSim.onUse = (Player p) => doors.useLines(p);
 
     // PICKUPS: walking the player (or any MF_PICKUP mobj) over a special mobj
@@ -104,67 +162,51 @@ class PlaySim {
 
     // Drive weapon firing + weapon-change from the player think path.
     playerSim.pspr = pspr;
-    // Optionally wake monsters when the player fires (vanilla P_FireWeapon
-    // calls P_NoiseAlert(player->mo, player->mo); COMBAT-B deferred it).
-    playerSim.onPlayerFire =
-        (Player p) => enemyAi.noiseAlert(p.mo!, p.mo!);
+    // Wake monsters when the player fires (vanilla P_FireWeapon noise alert).
+    playerSim.onPlayerFire = (Player p) => enemyAi.noiseAlert(p.mo!, p.mo!);
 
     // MONSTER door-opening: P_UseSpecialLine for monsters -> the door manager.
     enemyAi.useSpecialLine = (Mobj actor, Line line, int side) =>
         doors.useSpecialLine(actor, line, side);
 
-    // Teleport relocation for A_PainShootSkull / lost-soul spawn (P_TeleportMove
-    // -> P_TryMove without the dropoff/blocking re-link). Use the plain move.
+    // Teleport relocation for A_PainShootSkull / lost-soul spawn.
     enemyAi.teleportMove = (Mobj thing, fixed_t x, fixed_t y) {
       move.tryMove(thing, x, y);
     };
 
-    // Level-exit / boss / keen specials: no game-state level-transition system
-    // exists yet for the shareware E1M1 playtest (out of scope per the wiring
-    // brief). Leave safe no-ops so the AI never crashes if it fires them.
-    enemyAi.exitLevel = () {};
+    // -------------------------------------------------------------------
+    // LEVEL EXIT (g_game.c G_ExitLevel / G_SecretExitLevel): the switch / line
+    // / boss specials route through here. The integration LevelFlow installs
+    // [onExitLevel] / [onSecretExitLevel] (deferring ga_completed); the play-sim
+    // simply forwards to them so the map-change machinery lives one layer up.
+    // -------------------------------------------------------------------
+    void exit() => onExitLevel?.call();
+    void secretExit() => (onSecretExitLevel ?? onExitLevel)?.call();
+    enemyAi.exitLevel = exit; // boss-triggered exit (A_BossDeath etc.)
+    doors.exitLevel = exit; // switch special 11 + walk-over exit lines
+    doors.secretExitLevel = secretExit; // switch special 51
+
+    // Boss / keen specials beyond a plain exit: no-ops (no E1M8 boss flow yet).
     enemyAi.bossDeathTrigger = (Mobj boss) {};
     enemyAi.keenDieTrigger = () {};
   }
 
-  final World world;
-  final Skill skill;
-
-  late final ThinkerList thinkers;
-  late final MapMove move;
-  late final MobjSim mobjSim;
-  late final PlayerSim playerSim;
-  late final Spawner spawner;
-  late final DoorManager doors;
-  late final SwitchManager switches;
-  late final LightManager lights;
-  late final PlaySpriteSource spriteSource;
-
-  // --- Combat subsystems (COMBAT-D). ---
-  late final SoundHook sound;
-  late final Interactions interactions;
-  late final Sight sight;
-  late final Shoot shoot;
-  late final EnemyAi enemyAi;
-  late final Pspr pspr;
-
-  /// Player 1, valid after [spawnLevel].
-  final Player player = Player();
-
-  /// Level time in tics (vanilla `leveltime`).
-  int levelTime = 0;
-
-  final TicCmdBuilder _cmdBuilder = TicCmdBuilder();
-
   /// P_SetupLevel (playsim portion): spawn all map things, attach sector
   /// light specials, spawn player 1 at its start, and prime the viewpoint.
+  ///
+  /// [reborn] applies the full G_PlayerReborn starting loadout (the boot / new
+  /// game case). When false (a level change) [spawnPlayer] still re-arms the
+  /// psprites but the caller is responsible for preserving the inventory (see
+  /// [loadLevel] -> G_PlayerFinishLevel).
   void spawnLevel() {
     thinkers.clear();
     levelTime = 0;
+    spawner.reset();
     // M_ClearRandom: reset the shared gameplay rng at level start (vanilla).
     clearRandom();
 
-    // 1) Spawn / record every map thing.
+    // 1) Spawn / record every map thing (also accumulates the intermission
+    //    totals: totalkills / totalitems).
     for (final dynamic mt in world.level.things) {
       spawner.spawnMapThing(mt, skill: skill);
     }
@@ -184,6 +226,83 @@ class PlaySim {
     playerSim.calcHeight(player);
     _writeViewpoint();
   }
+
+  /// G_DoLoadLevel: load [mapName] into the shared [World], rebuild every
+  /// level-dependent subsystem against the new geometry, then re-spawn the
+  /// SAME [player] so its inventory carries to the new map.
+  ///
+  /// Inventory carry semantics (vanilla): the OLD level already had
+  /// G_PlayerFinishLevel applied (powers/cards cleared) before the intermission;
+  /// G_DoLoadLevel only re-spawns the player mobj. To keep this one clean
+  /// operation we snapshot the carried inventory here, re-spawn (which resets
+  /// the player to the reborn loadout), then restore the carried fields and
+  /// apply G_PlayerFinishLevel (clear keys/powers/tints) — matching the net
+  /// vanilla result: weapons + ammo + backpack persist, keys + powers do not.
+  void loadLevel(String mapName) {
+    // Snapshot the inventory that must survive the map change.
+    final List<int> savedAmmo = List<int>.of(player.ammo);
+    final List<int> savedMaxAmmo = List<int>.of(player.maxAmmo);
+    final List<int> savedWeaponOwned = List<int>.of(player.weaponOwned);
+    final bool savedBackpack = player.backpack;
+    final int savedReadyWeapon = player.readyWeapon;
+    final int savedKillCount = player.killCount;
+    final int savedItemCount = player.itemCount;
+    final int savedSecretCount = player.secretCount;
+
+    // Load the new map into the shared world (reuses the texture tables). The
+    // renderer + adapters read world.level / sim.* live, so swapping here +
+    // rebuilding the subsystems re-points everything at the new map.
+    world.changeLevel(mapName);
+    _buildSubsystems();
+
+    // spawnLevel re-spawns the player via the reborn loadout (and rebuilds the
+    // intermission totals for the NEW map).
+    spawnLevel();
+
+    // Restore the carried inventory over the reborn defaults.
+    for (int i = 0; i < savedAmmo.length; i++) {
+      player.ammo[i] = savedAmmo[i];
+    }
+    for (int i = 0; i < savedMaxAmmo.length; i++) {
+      player.maxAmmo[i] = savedMaxAmmo[i];
+    }
+    for (int i = 0; i < savedWeaponOwned.length; i++) {
+      player.weaponOwned[i] = savedWeaponOwned[i];
+    }
+    player.backpack = savedBackpack;
+    player.readyWeapon = savedReadyWeapon;
+    player.pendingWeapon = savedReadyWeapon;
+    // Counters persist across the reborn in vanilla G_PlayerReborn; the new
+    // map's stats start from these (intermission shows per-level deltas, but we
+    // keep the vanilla carry for fidelity — they are zero at boot).
+    player.killCount = savedKillCount;
+    player.itemCount = savedItemCount;
+    player.secretCount = savedSecretCount;
+
+    // G_PlayerFinishLevel (applied to the FINISHED level in vanilla; the net
+    // effect on entering the new map is keys + powers cleared, no tints):
+    for (int i = 0; i < player.cards.length; i++) {
+      player.cards[i] = false;
+    }
+    for (int i = 0; i < player.powers.length; i++) {
+      player.powers[i] = 0;
+    }
+    player.extraLight = 0;
+    player.fixedColormap = 0;
+    player.damageCount = 0;
+    player.bonusCount = 0;
+
+    // Re-arm the psprite for the carried ready weapon (P_BringUpWeapon picks up
+    // the restored readyWeapon rather than the reborn pistol).
+    pspr.setupPsprites(player);
+    _writeViewpoint();
+  }
+
+  /// Intermission totals for the CURRENTLY loaded level (vanilla totalkills /
+  /// totalitems / totalsecret). Read when building the wbstartstruct.
+  int get totalKills => spawner.totalKills;
+  int get totalItems => spawner.totalItems;
+  int get totalSecret => spawner.totalSecret;
 
   /// G_BuildTiccmd: fill [world.cmd] from the current [keys]. Returns the cmd.
   TicCmd buildTiccmd(KeyState keys) {

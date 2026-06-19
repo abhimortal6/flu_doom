@@ -39,6 +39,25 @@ class Spawner {
   /// Deathmatch starts (recorded but unused in single-player). Vanilla.
   final List<MapThing> deathmatchStarts = <MapThing>[];
 
+  /// Intermission totals, vanilla `totalkills` / `totalitems` / `totalsecret`
+  /// (counted in P_SpawnMapThing, reset by P_SetupLevel). The play-sim reads
+  /// these to build the wbstartstruct.
+  int totalKills = 0;
+  int totalItems = 0;
+  int totalSecret = 0;
+
+  /// Reset the per-level spawn bookkeeping (vanilla P_SetupLevel zeroes the
+  /// totals and clears the recorded starts before re-spawning).
+  void reset() {
+    totalKills = 0;
+    totalItems = 0;
+    totalSecret = 0;
+    for (int i = 0; i < playerStarts.length; i++) {
+      playerStarts[i] = null;
+    }
+    deathmatchStarts.clear();
+  }
+
   /// P_SpawnPlayer: spawn [player]'s mobj at [mthing], wire the back-reference,
   /// set its initial view height, apply the G_PlayerReborn loadout, and set up
   /// the weapon psprites via [pspr] (P_SetupPsprites). Faithful to vanilla.
@@ -165,6 +184,11 @@ class Spawner {
     if ((mthing.options & mtfAmbush) != 0) {
       mobj.flags |= mfAmbush;
     }
+
+    // Intermission totals (vanilla P_SpawnMapThing tail).
+    if ((mobj.flags & mfCountKill) != 0) totalKills++;
+    if ((mobj.flags & mfCountItem) != 0) totalItems++;
+
     return mobj;
   }
 
