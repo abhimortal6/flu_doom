@@ -106,6 +106,38 @@ class Player {
   bool attackDown = false;
   bool useDown = false;
 
+  // --- Inventory (vanilla player_t). Added by COMBAT-C, CONTRACTS_COMBAT §5. ---
+
+  /// Ammo currently held, indexed by ammotype_t. Vanilla `ammo[NUMAMMO]`.
+  final List<int> ammo = List<int>.filled(Am.numAmmo, 0);
+
+  /// Maximum ammo per type (doubled by the backpack). Vanilla `maxammo[]`.
+  final List<int> maxAmmo = <int>[200, 50, 300, 50];
+
+  /// Owned-weapon flags, indexed by weapontype_t. Vanilla `weaponowned[]`.
+  final List<int> weaponOwned = List<int>.filled(Wp.numWeapons, 0);
+
+  /// Power-up tics remaining, indexed by powertype_t. Vanilla `powers[]`.
+  final List<int> powers = List<int>.filled(6, 0);
+
+  /// Keycards / skull keys held, indexed by card_t. Vanilla `cards[]`.
+  final List<bool> cards = List<bool>.filled(6, false);
+
+  /// Whether the backpack has been picked up (doubled maxAmmo). Vanilla.
+  bool backpack = false;
+
+  /// The weapon currently in hand. Vanilla `readyweapon` (weapontype_t).
+  int readyWeapon = Wp.pistol;
+
+  /// The weapon being switched to (wp_nochange == 10). Vanilla `pendingweapon`.
+  int pendingWeapon = Wp.noChange;
+
+  /// Muzzle-flash extra light level the renderer reads. Vanilla `extralight`.
+  int extraLight = 0;
+
+  /// Frag counts (single-player slot only here). Vanilla `frags[MAXPLAYERS]`.
+  final List<int> frags = <int>[0];
+
   /// The two player sprites (weapon + flash). Vanilla `psprites[NUMPSPRITES]`.
   final List<Pspdef> psprites =
       List<Pspdef>.generate(numPsprites, (_) => Pspdef(), growable: false);
