@@ -117,9 +117,9 @@ class RenderState {
     for (int i = 0; i < kFineAngles ~/ 2; i++) {
       int t;
       final fixed_t tan = finetangent[i];
-      if (tan > fracUnitMul(2, focalLength)) {
+      if (tan > kFracUnit * 2) {
         t = -1;
-      } else if (tan < -fracUnitMul(2, focalLength)) {
+      } else if (tan < -kFracUnit * 2) {
         t = viewWidth + 1;
       } else {
         t = fixedMul(tan, focalLength);
@@ -153,9 +153,6 @@ class RenderState {
       }
     }
   }
-
-  // (a * focalLength*2) helper kept readable.
-  int fracUnitMul(int n, int v) => n * v;
 
   void _initLightTables() {
     // R_InitLightTables, faithful to r_main.c.

@@ -73,6 +73,26 @@ int _pointOnSide(fixed_t x, fixed_t y, Node node) {
 }
 
 void main() {
+  test('projection tables span the FOV (R_InitTextureMapping)', () {
+    final World world = _loadWorld();
+    _setViewToPlayerStart(world);
+    final Framebuffer fb = Framebuffer();
+    final Renderer r = Renderer(framebuffer: fb, world: world);
+    final s = r.state;
+    // xToViewAngle must vary across the screen: left/center/right distinct.
+    // (A regression where these collapse to one value yields a noise frame.)
+    expect(s.xToViewAngle[0], isNot(equals(s.xToViewAngle[s.centerX])));
+    expect(s.xToViewAngle[s.screenWidth],
+        isNot(equals(s.xToViewAngle[s.centerX])));
+    // Centre column looks straight ahead (angle ~0).
+    expect(s.xToViewAngle[s.centerX], equals(0));
+    // viewAngleToX must span the whole view width.
+    final int minX = s.viewAngleToX.reduce((int a, int b) => a < b ? a : b);
+    final int maxX = s.viewAngleToX.reduce((int a, int b) => a > b ? a : b);
+    expect(minX, equals(0));
+    expect(maxX, equals(s.screenWidth));
+  });
+
   test('renders a real E1M1 frame from the player start', () {
     final World world = _loadWorld();
     _setViewToPlayerStart(world);

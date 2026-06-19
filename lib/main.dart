@@ -1,8 +1,8 @@
 // flu_doom — a pure-Dart (no FFI) port of vanilla Doom.
-// Phase 1: foundation vertical slice. See lib/INTERFACES.md for the stable
-// public contracts that later modules build against.
+// "Base game up" milestone: the integrated, playable E1M1.
+// See lib/INTERFACES.md and the CONTRACTS_*.md docs for the subsystem contracts.
 
-import 'package:flutter/widgets.dart';
+import 'package:flutter/material.dart';
 
 import 'game/doom_game.dart';
 
@@ -16,16 +16,15 @@ class FlDoomApp extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return WidgetsApp(
+    return MaterialApp(
       color: const Color(0xFF000000),
       debugShowCheckedModeBanner: false,
       title: 'flu_doom',
-      builder: (BuildContext context, Widget? child) {
-        return const ColoredBox(
-          color: Color(0xFF000000),
-          child: DoomGame(),
-        );
-      },
+      theme: ThemeData.dark(useMaterial3: true),
+      home: const Scaffold(
+        backgroundColor: Color(0xFF000000),
+        body: DoomGame(),
+      ),
     );
   }
 }
