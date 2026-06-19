@@ -19,7 +19,9 @@
 import '../../engine/math/fixed.dart';
 import '../world/ticcmd.dart';
 import '../world/world.dart';
+import 'actions.dart';
 import 'g_build.dart';
+import 'p_random.dart';
 import 'mobj.dart';
 import 'p_doors.dart';
 import 'p_lights.dart';
@@ -34,6 +36,10 @@ import 'thinker.dart';
 /// The play simulation for one game on one [World].
 class PlaySim {
   PlaySim(this.world, {this.skill = Skill.medium}) {
+    // Register a log-once no-op stub for every A_* name in the info.c tables so
+    // the full vanilla state machine runs before the combat wave lands. Real
+    // implementations REPLACE these via ActionRegistry.register (idempotent).
+    ActionRegistry.instance.registerAllStubs();
     thinkers = ThinkerList();
     move = MapMove(world.level);
     mobjSim = MobjSim(move, thinkers);
@@ -71,6 +77,8 @@ class PlaySim {
   void spawnLevel() {
     thinkers.clear();
     levelTime = 0;
+    // M_ClearRandom: reset the shared gameplay rng at level start (vanilla).
+    clearRandom();
 
     // 1) Spawn / record every map thing.
     for (final dynamic mt in world.level.things) {

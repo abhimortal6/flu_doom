@@ -12,6 +12,7 @@
 // here — they are registered as no-op stubs that log ONCE the first time they
 // fire, so later waves can replace them without touching the state tables.
 
+import 'info_tables.dart';
 import 'mobj.dart';
 import 'player.dart';
 
@@ -41,6 +42,25 @@ class ActionRegistry {
   /// Register a real implementation for [name], replacing any prior one.
   void register(String name, MobjAction action) {
     _actions[name] = action;
+  }
+
+  /// Register EVERY A_* name referenced by the states[] table as a log-once
+  /// no-op stub. Called once at startup so the full vanilla info.c tables run
+  /// without crashing before the combat fan-out wave provides real bodies.
+  /// Fan-out agents call [register] to REPLACE a stub with the real action;
+  /// this never overwrites an already-registered (real) implementation.
+  void registerAllStubs() {
+    for (final String name in allActionNames) {
+      _actions.putIfAbsent(name, () => _stubFor(name));
+    }
+  }
+
+  MobjAction _stubFor(String name) {
+    return (Mobj mobj, {Player? player, Pspdef? psp}) {
+      if (_warned.add(name)) {
+        logSink('[playsim] unimplemented action $name (no-op stub)');
+      }
+    };
   }
 
   /// Look up an action by [name]. Always returns a callable: a registered

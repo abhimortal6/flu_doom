@@ -210,10 +210,12 @@ void main() {
     });
 
     test('player + effect states are present and self-consistent', () {
-      // S_PLAY idle loops on itself.
-      expect(states[149].nextState, 149);
-      // States array covers all referenced indices.
-      expect(states.length, greaterThan(700));
+      // S_PLAY (149) is the player idle state; vanilla info.c sets its
+      // nextstate to S_NULL (0) — it stays forever (tics == -1).
+      expect(states[149].nextState, 0);
+      expect(states[149].tics, -1);
+      // Full vanilla states[] table (NUMSTATES == 967).
+      expect(states.length, 967);
     });
   });
 }
