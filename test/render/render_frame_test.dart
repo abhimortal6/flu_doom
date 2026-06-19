@@ -1,86 +1,59 @@
-// Renders one real E1M1 frame from the player-1 start and asserts the output
-// is a plausible 3D scene (not a flat fill, deterministic, varied palette).
+// Renders one real E1M1 frame from the player-1 start and asserts the output is
+// the CORRECT vanilla scene — via a committed golden fingerprint plus structural
+// assertions that would have caught the "walls merging / broken view" bugs.
+//
+// REGENERATING THE GOLDEN (do this only after VISUALLY confirming the frame is
+// correct, e.g. via `DUMP_PREFIX=after flutter test test/render/dump_frame_test.dart`
+// and inspecting debug_shots/after*.png):
+//   1. Temporarily print fnv64(fb.pixels) from the player-start frame.
+//   2. Replace [_kGoldenFrameHash] below with the printed value and commit.
+// The hash is over the raw 320x200 indexed framebuffer, so any pixel change
+// (geometry, texture mapping, shading) trips it.
 
-import 'dart:io';
 import 'dart:typed_data';
 
 import 'package:flutter_test/flutter_test.dart';
 
-import 'package:flu_doom/engine/math/angle.dart';
-import 'package:flu_doom/engine/math/fixed.dart';
 import 'package:flu_doom/engine/render/renderer.dart';
 import 'package:flu_doom/engine/render/sprite_source.dart';
 import 'package:flu_doom/engine/video/framebuffer.dart';
-import 'package:flu_doom/engine/wad/wad.dart';
-import 'package:flu_doom/game/world/defs.dart';
 import 'package:flu_doom/game/world/world.dart';
 
-/// Eye height added to the player start z (vanilla VIEWHEIGHT = 41 units).
-const int kEyeHeight = 41 * kFracUnit;
+import 'render_support.dart';
 
-World _loadWorld() {
-  final File f = File('assets/doom1.wad');
-  final Uint8List bytes = f.readAsBytesSync();
-  final WadFile wad = WadFile.fromBytes(bytes);
-  return World.fromWad(wad, mapName: 'E1M1');
+/// Golden hash of the player-start E1M1 frame (FNV-1a 64-bit over fb.pixels).
+/// Captured after the frame was visually verified correct (techbase start room:
+/// STARTAN walls, computer banks, grey ceiling, distance-shaded floor, the
+/// central liquid pool). See the file header to regenerate.
+const int _kGoldenFrameHash = 0x36c705a0ae0e1ce0;
+
+int _fnv1a64(Uint8List px) {
+  int h = 0xcbf29ce484222325;
+  const int prime = 0x100000001b3;
+  for (final int b in px) {
+    h = (h ^ b);
+    h = (h * prime) & 0xFFFFFFFFFFFFFFFF;
+  }
+  return h;
 }
 
-/// Set the viewpoint to the player-1 start (MapThing type 1). Mirrors vanilla
-/// P_SpawnPlayer + R_SetupFrame: shift map units to fixed_t, BAM the angle,
-/// floor-height + eye-height for viewz.
-void _setViewToPlayerStart(World world) {
-  final MapThing start =
-      world.level.things.firstWhere((MapThing t) => t.type == 1);
-  final fixed_t vx = intToFixed(start.x);
-  final fixed_t vy = intToFixed(start.y);
-  // angle: degrees -> BAM. (ANG90/90)*deg, as P_SpawnMapThing does.
-  final angle_t vang = normAngle((start.angle ~/ 45) * kAng45);
-
-  // Find the floor height of the sector the player stands in (point in
-  // subsector via the BSP root walk is overkill; sample the start's sector by
-  // brute force using the lowest containing sector is complex — instead use the
-  // sector of the subsector found by a simple BSP descent).
-  final fixed_t floorZ = _floorHeightAt(world, vx, vy);
-  world.viewpoint.set(x: vx, y: vy, z: toInt32(floorZ + kEyeHeight), angle: vang);
-}
-
-fixed_t _floorHeightAt(World world, fixed_t x, fixed_t y) {
-  final level = world.level;
-  int nodeNum = level.rootNode;
-  while ((nodeNum & nfSubsector) == 0) {
-    final Node node = level.nodes[nodeNum];
-    final int side = _pointOnSide(x, y, node);
-    nodeNum = node.children[side];
-  }
-  final int idx = nodeNum & ~nfSubsector;
-  return level.subsectors[idx].sector.floorHeight;
-}
-
-int _pointOnSide(fixed_t x, fixed_t y, Node node) {
-  if (node.dx == 0) {
-    if (x <= node.x) return node.dy > 0 ? 1 : 0;
-    return node.dy < 0 ? 1 : 0;
-  }
-  if (node.dy == 0) {
-    if (y <= node.y) return node.dx < 0 ? 1 : 0;
-    return node.dx > 0 ? 1 : 0;
-  }
-  final int dx = toInt32(x - node.x);
-  final int dy = toInt32(y - node.y);
-  final int left = fixedMul(node.dy >> kFracBits, dx);
-  final int right = fixedMul(dy, node.dx >> kFracBits);
-  return right < left ? 0 : 1;
+Framebuffer _renderStartFrame() {
+  final World world = loadE1M1();
+  setViewToPlayerStart(world);
+  final Framebuffer fb = Framebuffer();
+  Renderer(framebuffer: fb, world: world)
+      .renderPlayerView(const EmptySpriteSource());
+  return fb;
 }
 
 void main() {
   test('projection tables span the FOV (R_InitTextureMapping)', () {
-    final World world = _loadWorld();
-    _setViewToPlayerStart(world);
+    final World world = loadE1M1();
+    setViewToPlayerStart(world);
     final Framebuffer fb = Framebuffer();
     final Renderer r = Renderer(framebuffer: fb, world: world);
     final s = r.state;
-    // xToViewAngle must vary across the screen: left/center/right distinct.
-    // (A regression where these collapse to one value yields a noise frame.)
+    // xToViewAngle must vary across the screen (a collapse -> noise frame).
     expect(s.xToViewAngle[0], isNot(equals(s.xToViewAngle[s.centerX])));
     expect(s.xToViewAngle[s.screenWidth],
         isNot(equals(s.xToViewAngle[s.centerX])));
@@ -93,60 +66,101 @@ void main() {
     expect(maxX, equals(s.screenWidth));
   });
 
-  test('renders a real E1M1 frame from the player start', () {
-    final World world = _loadWorld();
-    _setViewToPlayerStart(world);
+  test('player-start frame matches the committed golden fingerprint', () {
+    final Framebuffer fb = _renderStartFrame();
+    expect(fb.pixels.length, kScreenWidth * kScreenHeight);
+    expect(
+      _fnv1a64(fb.pixels),
+      equals(_kGoldenFrameHash),
+      reason: 'Frame changed vs golden. If this was an intentional renderer '
+          'change, VISUALLY re-verify debug_shots/after.png then update '
+          '_kGoldenFrameHash (see file header).',
+    );
+  });
 
-    final Framebuffer fb = Framebuffer();
-    final Renderer renderer = Renderer(framebuffer: fb, world: world);
-    renderer.renderPlayerView(const EmptySpriteSource());
+  test('frame has a coherent ceiling band, wall band and floor band', () {
+    // Structural sanity that a single noisy/garbage frame (the original bug)
+    // would fail: scan the centre column top->bottom. A real techbase view has
+    // a contiguous ceiling region up top and a contiguous floor region at the
+    // bottom, with wall geometry between — i.e. the top and bottom thirds are
+    // each dominated by a small set of indices, not random noise.
+    final Framebuffer fb = _renderStartFrame();
+    const int cx = kScreenWidth ~/ 2;
 
-    final Uint8List px = fb.pixels;
-    expect(px.length, kScreenWidth * kScreenHeight);
-
-    // 1. Not a single flat colour: count distinct palette indices.
-    final Set<int> distinct = px.toSet();
-    expect(distinct.length, greaterThan(8),
-        reason: 'expected a varied scene, got ${distinct.length} colours');
-
-    // 2. Plausible spread: the most-common colour must not dominate the whole
-    //    screen (a real view has walls, floor, ceiling, sky).
-    final Map<int, int> hist = <int, int>{};
-    for (final int p in px) {
-      hist[p] = (hist[p] ?? 0) + 1;
+    int distinctIn(int y0, int y1, int x) {
+      final Set<int> s = <int>{};
+      for (int y = y0; y < y1; y++) {
+        s.add(fb.getPixel(x, y));
+      }
+      return s.length;
     }
-    final int maxCount =
-        hist.values.reduce((int a, int b) => a > b ? a : b);
-    expect(maxCount, lessThan(px.length * 9 ~/ 10),
-        reason: 'one colour fills >90% of the screen ($maxCount px)');
 
-    // 3. A meaningful fraction of pixels are non-zero (geometry was drawn).
-    final int nonZero = px.where((int p) => p != 0).length;
-    expect(nonZero, greaterThan(px.length ~/ 4),
-        reason: 'too few pixels drawn: $nonZero');
+    // Sample three columns to avoid landing exactly on a doorway gap.
+    for (final int x in <int>[cx - 60, cx, cx + 60]) {
+      // Ceiling third: a flat/sky region -> few distinct indices.
+      expect(distinctIn(0, kScreenHeight ~/ 3, x), lessThan(24),
+          reason: 'ceiling band noisy at x=$x (broken visplanes/clip arrays)');
+      // Floor third: a flat region -> few distinct indices.
+      expect(distinctIn(kScreenHeight * 2 ~/ 3, kScreenHeight, x),
+          lessThan(40),
+          reason: 'floor band noisy at x=$x');
+    }
+  });
+
+  test('vertical wall coherence: adjacent columns are correlated', () {
+    // The "walls merging / torn geometry" bug produced columns that bore no
+    // relation to their neighbours. A correct perspective view has high
+    // column-to-column similarity (textures vary smoothly horizontally).
+    final Framebuffer fb = _renderStartFrame();
+    int matches = 0;
+    int total = 0;
+    for (int x = 1; x < kScreenWidth; x++) {
+      for (int y = 0; y < kScreenHeight; y++) {
+        total++;
+        if (fb.getPixel(x, y) == fb.getPixel(x - 1, y)) matches++;
+      }
+    }
+    final double ratio = matches / total;
+    // A coherent scene: >35% of vertically-aligned neighbour pixels are equal.
+    // (Pure noise would be ~1/numcolours; the original broken frame was ~low.)
+    expect(ratio, greaterThan(0.35),
+        reason: 'low horizontal coherence ($ratio) -> torn/merged geometry');
+  });
+
+  test('a clear horizon split exists (ceiling above, floor below)', () {
+    // The top rows must be dominated by the ceiling flat and the bottom rows by
+    // floor/liquid flats; a broken renderer that smeared walls over everything
+    // would not show this split.
+    final Framebuffer fb = _renderStartFrame();
+    final Map<int, int> top = <int, int>{};
+    final Map<int, int> bot = <int, int>{};
+    for (int y = 0; y < 24; y++) {
+      for (int x = 0; x < kScreenWidth; x++) {
+        final int v = fb.getPixel(x, y);
+        top[v] = (top[v] ?? 0) + 1;
+      }
+    }
+    for (int y = kScreenHeight - 24; y < kScreenHeight; y++) {
+      for (int x = 0; x < kScreenWidth; x++) {
+        final int v = fb.getPixel(x, y);
+        bot[v] = (bot[v] ?? 0) + 1;
+      }
+    }
+    int dominant(Map<int, int> m) =>
+        m.entries.reduce((a, b) => a.value >= b.value ? a : b).key;
+    // The dominant top index differs from the dominant bottom index.
+    expect(dominant(top), isNot(equals(dominant(bot))),
+        reason: 'ceiling and floor regions are indistinguishable');
   });
 
   test('is deterministic across two renders', () {
-    final World world = _loadWorld();
-    _setViewToPlayerStart(world);
-
-    final Framebuffer fb1 = Framebuffer();
-    Renderer(framebuffer: fb1, world: world)
-        .renderPlayerView(const EmptySpriteSource());
-
-    final Framebuffer fb2 = Framebuffer();
-    Renderer(framebuffer: fb2, world: world)
-        .renderPlayerView(const EmptySpriteSource());
-
+    final Framebuffer fb1 = _renderStartFrame();
+    final Framebuffer fb2 = _renderStartFrame();
     expect(fb1.pixels, equals(fb2.pixels));
   });
 
   test('empty sprite source renders a valid (non-empty) view', () {
-    final World world = _loadWorld();
-    _setViewToPlayerStart(world);
-    final Framebuffer fb = Framebuffer();
-    Renderer(framebuffer: fb, world: world)
-        .renderPlayerView(const EmptySpriteSource());
+    final Framebuffer fb = _renderStartFrame();
     expect(fb.pixels.any((int p) => p != 0), isTrue);
   });
 }

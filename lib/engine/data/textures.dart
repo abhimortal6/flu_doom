@@ -228,6 +228,19 @@ class Textures {
   /// Texture metadata by number.
   Texture texture(int num) => _textures[num];
 
+  /// For masked midtextures: if this texture is a single patch covering it
+  /// (origin 0,0, same width/height), return that patch's raw lump bytes so the
+  /// renderer can decode its posts for transparency (vanilla R_GetColumn returns
+  /// the patch column directly for single-patch textures). Returns null for
+  /// multi-patch / offset textures (treated as opaque composite).
+  Uint8List? singlePatchBytes(int texNum) {
+    final Texture tex = _textures[texNum];
+    if (tex.patches.length != 1) return null;
+    final TexPatch tp = tex.patches.first;
+    if (tp.patchLump < 0 || tp.originX != 0 || tp.originY != 0) return null;
+    return _wad.lumpByIndex(tp.patchLump).bytes;
+  }
+
   /// R_CheckTextureNumForName: returns -1 if not found. Texture name "-"
   /// (no texture) maps to 0 in vanilla side loading; callers handle "-".
   int checkTextureNumForName(String name) {

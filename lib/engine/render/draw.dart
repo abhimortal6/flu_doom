@@ -1,14 +1,11 @@
-// Low-level column / span drawers, ported from Chocolate Doom r_draw.c
-// (R_DrawColumn, R_DrawSpan) plus the fuzz column (R_DrawFuzzColumn) used for
-// spectre sprites.
+// Low-level column / span drawers — faithful Dart port of Chocolate
+// Doom (commit 353cf500) src/doom/r_draw.c (R_DrawColumn, R_DrawSpan,
+// R_DrawFuzzColumn).
 //
 // These write palette indices directly into the [Framebuffer]'s pixel buffer,
-// applying a colormap (light/distance shading) and a source texture/flat. Inner
-// loops use typed-data and allocate nothing per pixel.
-//
-// All drawers share a [DrawContext] holding the current source data, colormap,
-// scale/step and screen extents — the Dart analogue of r_draw.c's file-scope
-// `dc_*` / `ds_*` globals.
+// applying a colormap (light/distance shading). All drawers share a
+// [DrawContext] holding the current dc_*/ds_* state — the Dart analogue of
+// r_draw.c's file-scope globals.
 
 import 'dart:typed_data';
 
@@ -17,7 +14,10 @@ import '../video/framebuffer.dart';
 
 /// Shared drawer parameters (vanilla dc_*/ds_* globals).
 class DrawContext {
-  DrawContext(this.fb) : pixels = fb.pixels, screenWidth = fb.width, screenHeight = fb.height;
+  DrawContext(this.fb)
+      : pixels = fb.pixels,
+        screenWidth = fb.width,
+        screenHeight = fb.height;
 
   final Framebuffer fb;
   final Uint8List pixels;
@@ -28,10 +28,10 @@ class DrawContext {
   int dcX = 0;
   int dcYl = 0;
   int dcYh = 0;
-  fixed_t dcIScale = 0; // 1/scale, the texture step per screen pixel
-  fixed_t dcTextureMid = 0; // dc_texturemid
-  Uint8List? dcSource; // column texture data (height bytes)
-  Uint8List? dcColormap; // 256-byte light map
+  fixed_t dcIScale = 0;
+  fixed_t dcTextureMid = 0;
+  Uint8List? dcSource;
+  Uint8List? dcColormap;
   int dcSourceLen = 0;
 
   // --- Span drawer state (ds_*) ---
@@ -43,58 +43,61 @@ class DrawContext {
   fixed_t dsYfrac = 0;
   fixed_t dsXstep = 0;
   fixed_t dsYstep = 0;
-  Uint8List? dsSource; // 64x64 flat (4096 bytes)
+  Uint8List? dsSource; // 64x64 flat (4096 bytes), row-major (y*64+x).
 
-  /// R_DrawColumn: draw a vertical run of texels for one screen column,
-  /// sampling [dcSource] (a texture column, `height` bytes, but indexed mod the
-  /// texture height via masking) through [dcColormap].
+  /// R_DrawColumn. Faithful to r_draw.c:
+  ///   count = dc_yh - dc_yl; if (count < 0) return;
+  ///   dest = ...; fracstep = dc_iscale;
+  ///   frac = dc_texturemid + (dc_yl-centery)*fracstep;
+  ///   heightmask = (sourcelen)-1;  // dc_source is a column of `len` bytes
+  ///   do { *dest = colormap[source[(frac>>FRACBITS)&heightmask]];
+  ///        dest += SCREENWIDTH; frac += fracstep; } while (count--);
   ///
-  /// Faithful to r_draw.c: `frac = dc_texturemid + (dc_yl-centery)*dc_iscale`,
-  /// then for each y, `dest = colormap[source[(frac>>FRACBITS)&heightmask]]`.
+  /// Vanilla R_DrawColumn always uses heightmask = 127 (column height fixed by
+  /// the texture system to a power of two). We support a general power-of-two
+  /// height and fall back to a true modulo for non-pow2 sprite posts.
   void drawColumn() {
     final int yl = dcYl;
     final int yh = dcYh;
-    if (yl > yh) return;
+    int count = yh - yl;
+    if (count < 0) return;
     final Uint8List source = dcSource!;
     final Uint8List colormap = dcColormap!;
     final Uint8List dst = pixels;
     final int sw = screenWidth;
-    final int x = dcX;
 
-    // heightmask: source length must be a power of two for the cheap mask;
-    // textures in vanilla are power-of-two tall. Fall back to modulo otherwise.
     final int len = dcSourceLen;
     final bool pow2 = (len & (len - 1)) == 0 && len > 0;
     final int mask = len - 1;
 
-    fixed_t frac = dcTextureMid + (yl - centerY) * dcIScale;
-    final fixed_t step = dcIScale;
-    int dest = yl * sw + x;
+    final fixed_t fracstep = dcIScale;
+    fixed_t frac = dcTextureMid + (yl - centerY) * fracstep;
+    int dest = yl * sw + dcX;
+
     if (pow2) {
-      for (int y = yl; y <= yh; y++) {
-        final int s = (frac >> kFracBits) & mask;
-        dst[dest] = colormap[source[s]];
+      do {
+        dst[dest] = colormap[source[(frac >> kFracBits) & mask]];
         dest += sw;
-        frac += step;
-      }
+        frac = toInt32(frac + fracstep);
+      } while (count-- != 0);
     } else {
-      for (int y = yl; y <= yh; y++) {
+      do {
         int s = (frac >> kFracBits) % len;
         if (s < 0) s += len;
         dst[dest] = colormap[source[s]];
         dest += sw;
-        frac += step;
-      }
+        frac = toInt32(frac + fracstep);
+      } while (count-- != 0);
     }
   }
 
-  /// R_DrawSpan: draw a horizontal run of a 64x64 flat for one scanline,
-  /// stepping (xfrac,yfrac) by (xstep,ystep) per pixel and shading through
-  /// [dsColormap]. Faithful to r_draw.c (spot = ((yfrac>>10)&0xFC0)+((xfrac>>16)&0x3F)).
+  /// R_DrawSpan. Faithful to r_draw.c:
+  ///   spot = ((yfrac>>(16-6))&(0x3f<<6)) + ((xfrac>>16)&0x3f);
+  ///         == ((yfrac>>10)&0xFC0) + ((xfrac>>16)&0x3F)
   void drawSpan() {
     final int x1 = dsX1;
     final int x2 = dsX2;
-    if (x1 > x2) return;
+    if (x2 < x1) return;
     final Uint8List source = dsSource!;
     final Uint8List colormap = dsColormap!;
     final Uint8List dst = pixels;
@@ -103,46 +106,38 @@ class DrawContext {
     final fixed_t xstep = dsXstep;
     final fixed_t ystep = dsYstep;
     int dest = dsY * screenWidth + x1;
-    for (int x = x1; x <= x2; x++) {
+    int count = x2 - x1;
+    do {
       final int spot = ((yfrac >> 10) & 0xFC0) + ((xfrac >> 16) & 0x3F);
       dst[dest] = colormap[source[spot]];
       dest++;
       xfrac = toInt32(xfrac + xstep);
       yfrac = toInt32(yfrac + ystep);
-    }
+    } while (count-- != 0);
   }
 
-  /// R_DrawMaskedColumn helper for sprites/masked midtextures: like drawColumn
-  /// but the source column is the post-decoded sprite column and transparent
-  /// regions are handled by the caller (it only calls this for opaque runs).
-  /// Here we reuse drawColumn with a non-masked, exact-length source by using
-  /// the modulo path; sprites are not power-of-two tall.
-  void drawMaskedColumn() => drawColumn();
-
-  /// R_DrawFuzzColumn: the spectre "fuzz" effect. Instead of sampling the
-  /// source, it darkens the existing pixels using a fixed colormap (map 6) and
-  /// a vertical jitter pattern. Faithful to r_draw.c's fuzzoffset table.
+  /// R_DrawFuzzColumn: the spectre "fuzz" effect (r_draw.c). Darkens existing
+  /// pixels through colormap[6] sampled with a vertical jitter pattern.
   void drawFuzzColumn() {
     int yl = dcYl;
     int yh = dcYh;
-    // Clamp away from screen edges (vanilla does the same).
-    if (yl <= 0) yl = 1;
-    if (yh >= screenHeight - 1) yh = screenHeight - 2;
-    if (yl > yh) return;
+    // Adjust borders, exactly as vanilla.
+    if (yl == 0) yl = 1;
+    if (yh == screenHeight - 1) yh = screenHeight - 2;
+    int count = yh - yl;
+    if (count < 0) return;
     final Uint8List dst = pixels;
     final int sw = screenWidth;
-    final int x = dcX;
-    final Uint8List fuzzMap = dcColormap!; // caller sets to colormap map 6
-    int dest = yl * sw + x;
-    for (int y = yl; y <= yh; y++) {
-      // Sample a neighbouring pixel offset vertically by the fuzz pattern.
+    final Uint8List fuzzMap = dcColormap!; // caller sets colormaps + 6*256
+    int dest = yl * sw + dcX;
+    do {
       final int srcIdx = dest + _fuzzOffset[_fuzzPos] * sw;
       final int sample =
           (srcIdx >= 0 && srcIdx < dst.length) ? dst[srcIdx] : dst[dest];
       dst[dest] = fuzzMap[sample];
       _fuzzPos = (_fuzzPos + 1) % _fuzzOffset.length;
       dest += sw;
-    }
+    } while (count-- != 0);
   }
 
   int _fuzzPos = 0;
@@ -152,6 +147,6 @@ class DrawContext {
     1, -1, -1, 1, 1, -1, -1, -1, -1, 1, 1, 1, 1, -1, 1, 1, -1, 1
   ];
 
-  // centery == screen vertical centre. Mirrors RenderState.centerY; set once.
+  // centery == screen vertical centre (set once by the owning Renderer).
   int centerY = kScreenHeight ~/ 2;
 }

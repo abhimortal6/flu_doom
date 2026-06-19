@@ -60,12 +60,17 @@ class Renderer {
       textures: world.textures,
       skyFlatNum: skyFlat < 0 ? -1 : skyFlat,
     );
-    _bsp = BspRenderer(state: _state, segs: _segs, planes: _planes);
     _things = ThingRenderer(
       state: _state,
       draw: _draw,
       segRenderer: _segs,
       textures: world.textures,
+    );
+    _bsp = BspRenderer(
+      state: _state,
+      segs: _segs,
+      planes: _planes,
+      things: _things,
     );
   }
 
@@ -92,6 +97,7 @@ class Renderer {
   /// viewpoint.
   void renderPlayerView([SpriteSource sprites = const EmptySpriteSource()]) {
     final vp = world.viewpoint;
+    // R_SetupFrame.
     _state.setupFrame(
       x: vp.x,
       y: vp.y,
@@ -99,11 +105,19 @@ class Renderer {
       angle: normAngle(vp.angle),
       extraLight: 0,
     );
-    _planes.setupFrame();
-    _planes.clearPlanes();
-    _segs.clear();
+    _draw.centerY = _state.centerY;
+
+    // Clear buffers — EXACT vanilla R_RenderPlayerView order. Every one of
+    // these runs EVERY frame; missing any leaves stale clip/visplane/drawseg
+    // data that smears walls as the camera turns.
+    _bsp.clearClipSegs(); // R_ClearClipSegs (solidsegs sentinels)
+    _segs.clearDrawSegs(); // R_ClearDrawSegs (ds_p = drawsegs)
+    _segs.clearOpenings(); // lastopening = openings (part of R_ClearPlanes)
+    _planes.clearPlanes(); // R_ClearPlanes (visplanes, floorclip/ceilingclip)
+    _things.clearSprites(); // R_ClearSprites (vissprite_p = vissprites)
 
     final level = world.level;
+    // R_RenderBSPNode(numnodes-1).
     _bsp.render(
       segsList: level.segs,
       subsectors: level.subsectors,
@@ -111,8 +125,8 @@ class Renderer {
       rootNode: level.rootNode,
     );
 
-    _planes.drawPlanes();
-    _things.drawMasked(sprites);
+    _planes.drawPlanes(); // R_DrawPlanes
+    _things.drawMasked(sprites); // R_DrawMasked
   }
 
   int _resolveSkyTexture(World world) {

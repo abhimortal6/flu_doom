@@ -1,14 +1,20 @@
-// Shared renderer state — the Dart equivalent of vanilla's r_state.h /
-// r_main.c globals (centerx, projection, viewangletox[], xtoviewangle[],
-// scalelight[][], zlight[][], etc.) plus the per-frame view setup
-// (R_SetupFrame) and the projection-table init (R_InitTables / R_InitLightTables).
+// Shared renderer state — a faithful Dart port of vanilla Doom's
+// r_main.c globals + r_state.h, and the per-frame view setup (R_SetupFrame).
 //
-// One [RenderState] is created once for a given screen size and reused across
-// frames; [setupFrame] is called once per frame from the camera. The sub-pass
-// modules (BSP, segs, planes, things) all read/write this object — exactly as
-// the C code shares file-scope globals.
+// Ported from Chocolate Doom (commit 353cf500), src/doom/r_main.c.
+// FOV is fixed at 90 degrees (FIELDOFVIEW = 2048 fineangles). The view occupies
+// the FULL screen (no status-bar inset in this engine: setblocks == 11).
 //
-// Faithful to Chocolate Doom r_main.c. FOV is fixed at 90 degrees.
+// IMPORTANT FAITHFULNESS NOTES (these were the source of prior bugs):
+//   * finesine[] has 5*FINEANGLES/4 = 10240 entries and finetangent[] has
+//     FINEANGLES/2 = 4096 entries. Vanilla indexes them with
+//     `(angle) >> ANGLETOFINESHIFT` WITHOUT masking — the index can legally
+//     exceed FINEANGLES (up to ~10240 for finesine). We MUST NOT mask with
+//     kFineMask here, or scale/texture math is corrupted at certain view
+//     angles (the "smear while turning" artifact). We replicate vanilla's
+//     unmasked shift exactly.
+//   * angle_t is unsigned 32-bit; we keep values masked to 32 bits via & on the
+//     shift result so the >>19 yields the same index C's unsigned shift does.
 
 import 'dart:typed_data';
 
@@ -17,19 +23,27 @@ import '../math/fixed.dart';
 import '../math/tables.dart';
 import '../video/palette.dart';
 
-/// Field of view = 90 degrees. (Vanilla FIELDOFVIEW = 2048 fineangles = 90deg.)
+/// Field of view = 90 degrees. (Vanilla FIELDOFVIEW = 2048 fineangles.)
 const int kFieldOfView = 2048;
 
-// --- Light table constants (r_main.c / r_data.c). ---
+// --- Light table constants (r_main.c). ---
 const int kLightLevels = 16; // LIGHTLEVELS
-const int kLightSegShift = 4; // LIGHTSEGSHIFT (8 -> 16 for 320 width? see init)
-const int kLightBright = 1; // LIGHTBRIGHT? -> we use vanilla numbers below
+const int kLightSegShift = 4; // LIGHTSEGSHIFT
 const int kMaxLightScale = 48; // MAXLIGHTSCALE
 const int kLightScaleShift = 12; // LIGHTSCALESHIFT
 const int kMaxLightZ = 128; // MAXLIGHTZ
 const int kLightZShift = 20; // LIGHTZSHIFT
-const int kNumColorMaps = 32; // NUMCOLORMAPS (light levels in COLORMAP)
-const int kDistMap = 2; // distmap in R_InitLightTables
+const int kNumColorMaps = 32; // NUMCOLORMAPS
+const int kDistMap = 2; // DISTMAP
+
+/// ANGLETOFINESHIFT, but applied to a 32-bit-masked angle WITHOUT a fine mask.
+/// This is the exact vanilla `(angle) >> ANGLETOFINESHIFT` for an unsigned
+/// 32-bit angle: produces an index in [0, FINEANGLES) for finesine/finecosine
+/// (0..8191) and [0, FINEANGLES/2) for finetangent when the caller has biased
+/// the angle accordingly. Used by R_ScaleFromGlobalAngle / R_RenderSegLoop /
+/// R_MapPlane where the bias can push the index past FINEANGLES (legal: the
+/// finesine table is 10240 long).
+int fineShift(int angle) => (angle & 0xFFFFFFFF) >> kAngleToFineShift;
 
 /// Shared per-frame + persistent renderer state.
 class RenderState {
@@ -39,52 +53,48 @@ class RenderState {
     required this.colormap,
   })  : centerX = screenWidth ~/ 2,
         centerY = screenHeight ~/ 2,
-        // 3D view occupies the FULL screen height (status bar ignored this
-        // phase — see CONTRACTS_RENDER.md). viewwidth/viewheight == screen.
         viewWidth = screenWidth,
         viewHeight = screenHeight,
-        viewWindowX = 0,
-        viewWindowY = 0,
         centerXFrac = (screenWidth ~/ 2) << kFracBits,
         centerYFrac = (screenHeight ~/ 2) << kFracBits {
     _initTextureMapping();
     _initLightTables();
-    _initClipArrays();
   }
 
-  // --- Screen / view window geometry (R_SetViewSize / R_ExecuteSetViewSize) ---
+  // --- Screen / view window geometry (R_ExecuteSetViewSize, setblocks==11) ---
   final int screenWidth;
   final int screenHeight;
   final int viewWidth;
   final int viewHeight;
-  final int viewWindowX;
-  final int viewWindowY;
   final int centerX;
   final int centerY;
   final int centerXFrac;
   final int centerYFrac;
 
-  /// projection = centerXFrac (vanilla `projection`). Distance->scale factor.
+  /// projection = centerxfrac. (r_main.c)
   late final fixed_t projection = centerXFrac;
 
-  /// finetangent index where the FOV's left/right rays sit (focallength etc).
-  /// viewangletox: for each fine angle, the screen column it maps to.
+  /// pspritescale = FRACUNIT*viewwidth/SCREENWIDTH; here viewwidth==SCREENWIDTH.
+  late final fixed_t pspriteScale = (kFracUnit * viewWidth) ~/ screenWidth;
+  late final fixed_t pspriteIScale = (kFracUnit * screenWidth) ~/ viewWidth;
+
+  /// viewangletox[FINEANGLES/2]: for each fine angle, the screen column.
   late final Int32List viewAngleToX = Int32List(kFineAngles ~/ 2);
 
-  /// xtoviewangle: for each screen column (0..viewWidth), the view angle.
+  /// xtoviewangle[SCREENWIDTH+1]: for each screen column, the view angle.
   late final Uint32List xToViewAngle = Uint32List(screenWidth + 1);
 
-  // --- Light tables (R_InitLightTables) ---
+  /// clipangle = xtoviewangle[0]. (r_main.c)
+  late angle_t clipAngle;
+
+  // --- Light tables (R_InitLightTables / R_ExecuteSetViewSize) ---
   final Colormap colormap;
 
-  /// scalelight[LIGHTLEVELS][MAXLIGHTSCALE] -> colormap index (0..NUMCOLORMAPS-1).
+  /// scalelight[LIGHTLEVELS][MAXLIGHTSCALE] -> colormap index.
   late final List<Int32List> scaleLight;
 
   /// zlight[LIGHTLEVELS][MAXLIGHTZ] -> colormap index.
   late final List<Int32List> zLight;
-
-  /// Number of colormaps (NUMCOLORMAPS) actually available for shading.
-  int get numColorMaps => kNumColorMaps;
 
   // --- Per-frame view (R_SetupFrame) ---
   fixed_t viewX = 0;
@@ -94,35 +104,44 @@ class RenderState {
   fixed_t viewSin = 0;
   fixed_t viewCos = 0;
 
-  /// extralight (weapon flash); 0 unless playsim adds it. Affects light index.
+  /// extralight (weapon flash); 0 unless playsim adds it.
   int extraLight = 0;
 
-  // --- Clip / occlusion arrays shared by BSP, segs, planes ---
-  /// ceilingclip[x] / floorclip[x]: the current vertical clip bounds per column
-  /// used by visplanes (R_MapPlane reads these via the plane's top/bottom).
-  /// floorclip is the lowest pixel a wall has drawn to (bottom clip), ceilingclip
-  /// the highest. Initialized per frame.
+  // --- Clip / occlusion arrays (r_plane.c). ---
+  /// floorclip starts SCREENHEIGHT (viewheight); ceilingclip starts -1.
   late final Int16List ceilingClip = Int16List(screenWidth);
   late final Int16List floorClip = Int16List(screenWidth);
 
+  /// negonearray / screenheightarray (r_things.c) — constant sprite clips.
+  late final Int16List negOneArray = () {
+    final a = Int16List(screenWidth);
+    for (int i = 0; i < screenWidth; i++) {
+      a[i] = -1;
+    }
+    return a;
+  }();
+  late final Int16List screenHeightArray = () {
+    final a = Int16List(screenWidth);
+    for (int i = 0; i < screenWidth; i++) {
+      a[i] = viewHeight;
+    }
+    return a;
+  }();
+
   void _initTextureMapping() {
     // R_InitTextureMapping, faithful to r_main.c.
-    // focallength = FixedDiv(centerxfrac, finetangent[FINEANGLES/4 + FIELDOFVIEW/2])
-    final int fovHalf = kFieldOfView ~/ 2;
-    final int focalIndex = kFineAngles ~/ 4 + fovHalf;
+    // focallength = FixedDiv(centerxfrac, finetangent[FINEANGLES/4+FIELDOFVIEW/2])
     final fixed_t focalLength =
-        fixedDiv(centerXFrac, finetangent[focalIndex]);
+        fixedDiv(centerXFrac, finetangent[kFineAngles ~/ 4 + kFieldOfView ~/ 2]);
 
-    // For each fine angle in [0, FINEANGLES/2), compute the screen column.
     for (int i = 0; i < kFineAngles ~/ 2; i++) {
       int t;
-      final fixed_t tan = finetangent[i];
-      if (tan > kFracUnit * 2) {
+      if (finetangent[i] > kFracUnit * 2) {
         t = -1;
-      } else if (tan < -kFracUnit * 2) {
+      } else if (finetangent[i] < -kFracUnit * 2) {
         t = viewWidth + 1;
       } else {
-        t = fixedMul(tan, focalLength);
+        t = fixedMul(finetangent[i], focalLength);
         t = (centerXFrac - t + kFracUnit - 1) >> kFracBits;
         if (t < -1) {
           t = -1;
@@ -133,18 +152,19 @@ class RenderState {
       viewAngleToX[i] = t;
     }
 
-    // Scan viewangletox[] to fill xtoviewangle[].
+    // Scan viewangletox[] to generate xtoviewangle[] — VANILLA ORDER: this
+    // runs BEFORE the fencepost clamp below (the unclamped -1 / viewwidth+1
+    // sentinels are what make the `while (viewangletox[i]>x) i++` loop stop at
+    // the right place; clamping first shifts the boundary by a fine-angle).
     for (int x = 0; x <= viewWidth; x++) {
       int i = 0;
-      while (i < kFineAngles ~/ 2 && viewAngleToX[i] > x) {
+      while (viewAngleToX[i] > x) {
         i++;
       }
-      // xtoviewangle[x] = (i<<ANGLETOFINESHIFT) - ANG90
-      xToViewAngle[x] =
-          normAngle((i << kAngleToFineShift) - kAng90);
+      xToViewAngle[x] = normAngle((i << kAngleToFineShift) - kAng90);
     }
 
-    // Clamp viewangletox values to [0, viewwidth] (vanilla post-pass).
+    // Take out the fencepost cases from viewangletox.
     for (int i = 0; i < kFineAngles ~/ 2; i++) {
       if (viewAngleToX[i] == -1) {
         viewAngleToX[i] = 0;
@@ -152,25 +172,25 @@ class RenderState {
         viewAngleToX[i] = viewWidth;
       }
     }
+
+    clipAngle = xToViewAngle[0];
   }
 
   void _initLightTables() {
-    // R_InitLightTables, faithful to r_main.c.
-    final int numMaps = colormap.numMaps >= kNumColorMaps
-        ? kNumColorMaps
-        : colormap.numMaps;
+    // R_InitLightTables (zlight) + R_ExecuteSetViewSize (scalelight).
+    final int numMaps =
+        colormap.numMaps >= kNumColorMaps ? kNumColorMaps : colormap.numMaps;
     scaleLight = List<Int32List>.generate(
         kLightLevels, (_) => Int32List(kMaxLightScale));
     zLight =
         List<Int32List>.generate(kLightLevels, (_) => Int32List(kMaxLightZ));
 
-    // zlight (distance-based).
     for (int i = 0; i < kLightLevels; i++) {
-      final int startMap = ((kLightLevels - 1 - i) * 2) * numMaps ~/ kLightLevels;
+      final int startMap =
+          ((kLightLevels - 1 - i) * 2) * numMaps ~/ kLightLevels;
       for (int j = 0; j < kMaxLightZ; j++) {
-        // scale = FixedDiv(SCREENWIDTH/2*FRACUNIT, (j+1)<<LIGHTZSHIFT)>>LIGHTSCALESHIFT
-        int scale = fixedDiv(
-            (screenWidth ~/ 2) * kFracUnit, (j + 1) << kLightZShift);
+        int scale =
+            fixedDiv((screenWidth ~/ 2) * kFracUnit, (j + 1) << kLightZShift);
         scale >>= kLightScaleShift;
         int level = startMap - scale ~/ kDistMap;
         if (level < 0) level = 0;
@@ -178,11 +198,12 @@ class RenderState {
         zLight[i][j] = level;
       }
     }
-    // scalelight (R_ExecuteSetViewSize portion).
     for (int i = 0; i < kLightLevels; i++) {
-      final int startMap = ((kLightLevels - 1 - i) * 2) * numMaps ~/ kLightLevels;
+      final int startMap =
+          ((kLightLevels - 1 - i) * 2) * numMaps ~/ kLightLevels;
       for (int j = 0; j < kMaxLightScale; j++) {
-        int level = startMap - (j * screenWidth ~/ 320) ~/ kDistMap;
+        // level = startmap - j*SCREENWIDTH/viewwidth/DISTMAP; viewwidth==SW.
+        int level = startMap - (j * screenWidth ~/ viewWidth) ~/ kDistMap;
         if (level < 0) level = 0;
         if (level >= numMaps) level = numMaps - 1;
         scaleLight[i][j] = level;
@@ -190,12 +211,9 @@ class RenderState {
     }
   }
 
-  void _initClipArrays() {
-    // Filled per-frame in setupFrame; allocate above.
-  }
-
-  /// R_SetupFrame: copy the camera in and precompute view sin/cos. Resets the
-  /// per-frame occlusion arrays.
+  /// R_SetupFrame: copy the camera in, precompute view sin/cos. Note: the clip
+  /// arrays are reset by R_ClearPlanes (PlaneRenderer.clearPlanes), exactly as
+  /// vanilla — NOT here.
   void setupFrame({
     required fixed_t x,
     required fixed_t y,
@@ -208,17 +226,11 @@ class RenderState {
     viewZ = z;
     viewAngle = normAngle(angle);
     this.extraLight = extraLight;
-    final int fineIdx = angleToFineIndex(viewAngle);
-    viewSin = finesine[fineIdx];
-    viewCos = finecosine[fineIdx];
-    // ceilingclip = -1 (top), floorclip = viewheight (bottom): nothing drawn.
-    for (int xx = 0; xx < screenWidth; xx++) {
-      ceilingClip[xx] = -1;
-      floorClip[xx] = viewHeight;
-    }
+    viewSin = finesine[fineShift(viewAngle)];
+    viewCos = finecosine[fineShift(viewAngle)];
   }
 
-  /// R_PointToAngle: angle from the viewpoint to (x, y). Faithful to r_main.c.
+  /// R_PointToAngle: faithful to r_main.c.
   angle_t pointToAngle(fixed_t x, fixed_t y) {
     return _pointToAngleFrom(viewX, viewY, x, y);
   }
@@ -236,52 +248,40 @@ class RenderState {
     if (x == 0 && y == 0) return 0;
 
     if (x >= 0) {
-      // x >=0
       if (y >= 0) {
         if (x > y) {
-          // octant 0
-          return tantoangle[slopeDiv(y, x)];
+          return tantoangle[slopeDiv(y, x)]; // octant 0
         } else {
-          // octant 1
-          return normAngle(kAng90 - 1 - tantoangle[slopeDiv(x, y)]);
+          return normAngle(kAng90 - 1 - tantoangle[slopeDiv(x, y)]); // octant 1
         }
       } else {
-        // y < 0
         y = -y;
         if (x > y) {
-          // octant 8
-          return normAngle(-tantoangle[slopeDiv(y, x)]);
+          return normAngle(-tantoangle[slopeDiv(y, x)]); // octant 8
         } else {
-          // octant 7
-          return normAngle(kAng270 + tantoangle[slopeDiv(x, y)]);
+          return normAngle(kAng270 + tantoangle[slopeDiv(x, y)]); // octant 7
         }
       }
     } else {
-      // x < 0
       x = -x;
       if (y >= 0) {
         if (x > y) {
-          // octant 3
-          return normAngle(kAng180 - 1 - tantoangle[slopeDiv(y, x)]);
+          return normAngle(kAng180 - 1 - tantoangle[slopeDiv(y, x)]); // oct 3
         } else {
-          // octant 2
-          return normAngle(kAng90 + tantoangle[slopeDiv(x, y)]);
+          return normAngle(kAng90 + tantoangle[slopeDiv(x, y)]); // octant 2
         }
       } else {
-        // y < 0
         y = -y;
         if (x > y) {
-          // octant 4
-          return normAngle(kAng180 + tantoangle[slopeDiv(y, x)]);
+          return normAngle(kAng180 + tantoangle[slopeDiv(y, x)]); // octant 4
         } else {
-          // octant 5
-          return normAngle(kAng270 - 1 - tantoangle[slopeDiv(x, y)]);
+          return normAngle(kAng270 - 1 - tantoangle[slopeDiv(x, y)]); // oct 5
         }
       }
     }
   }
 
-  /// R_PointToDist: distance from the viewpoint to (x, y). Faithful to r_main.c.
+  /// R_PointToDist: faithful to r_main.c.
   fixed_t pointToDist(fixed_t x, fixed_t y) {
     int dx = (toInt32(x - viewX)).abs();
     int dy = (toInt32(y - viewY)).abs();
@@ -291,14 +291,12 @@ class RenderState {
       dx = dy;
       dy = t;
     }
-    if (dx == 0) return 0;
-    // angle = (tantoangle[ FixedDiv(dy,dx)>>DBITS ] + ANG90) >> ANGLETOFINESHIFT
-    final int frac = fixedDiv(dy, dx);
-    final int idx = (frac >> _dbits);
-    final angle_t a =
-        normAngle(tantoangle[idx & (kSlopeRange)] + kAng90);
-    final int fineIdx = (a >> kAngleToFineShift) & kFineMask;
-    final fixed_t dist = fixedDiv(dx, finesine[fineIdx]);
+    // Fix crashes in udm1.wad (vanilla guard).
+    final int frac = dx != 0 ? fixedDiv(dy, dx) : 0;
+    // angle = (tantoangle[frac>>DBITS]+ANG90) >> ANGLETOFINESHIFT
+    final int angle =
+        fineShift(normAngle(tantoangle[frac >> _dbits] + kAng90));
+    final fixed_t dist = fixedDiv(dx, finesine[angle]);
     return dist;
   }
 

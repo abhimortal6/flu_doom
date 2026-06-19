@@ -74,7 +74,12 @@ void main() {
     final DummyPlayerStatus alive = DummyPlayerStatus()..health = 100;
     final DummyPlayerStatus dead = DummyPlayerStatus()..health = 0;
 
+    // Faithful to st_stuff.c: the face is chosen by the ticker
+    // (ST_updateFaceWidget), then drawn. The game ticks once per frame before
+    // drawing, so tick first.
+    bar.tick(alive);
     bar.draw(fbAlive, alive);
+    bar.tick(dead);
     bar.draw(fbDead, dead);
 
     // The face region should differ between alive and dead.

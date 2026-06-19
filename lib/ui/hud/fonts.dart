@@ -8,6 +8,7 @@
 import '../../engine/video/framebuffer.dart';
 import '../../engine/video/patch.dart';
 import 'graphics_cache.dart';
+import 'patch_draw.dart';
 
 /// A fixed set of digit glyphs (0..9) plus optional percent / minus, as used by
 /// the status bar number widgets (st_number_t / st_percent_t). Numbers are
@@ -72,34 +73,34 @@ class NumberFont {
     // Special case 0.
     if (n == 0) {
       cx -= w;
-      digits[0]?.draw(fb, cx, y);
+      digits[0]?.drawV(fb, cx, y);
       if (neg && minus != null) {
         cx -= w;
-        minus!.draw(fb, cx, y);
+        minus!.drawV(fb, cx, y);
       }
       return cx;
     }
     while (n != 0) {
       cx -= w;
-      digits[n % 10]?.draw(fb, cx, y);
+      digits[n % 10]?.drawV(fb, cx, y);
       n ~/= 10;
     }
     if (neg && minus != null) {
       cx -= w;
-      minus!.draw(fb, cx, y);
+      minus!.drawV(fb, cx, y);
     }
     return cx;
   }
 
-  /// Draw a number followed by a percent glyph (st_percent_t). The '%' sits at
-  /// [x] right edge; the number is drawn to its left.
+  /// Draw a percentage (st_percent_t). Faithful to STlib_drawPercent: the '%'
+  /// glyph is drawn with its LEFT edge at [x] (V_DrawPatch at per->n.x), and the
+  /// number is drawn right-justified so its rightmost digit's right edge is also
+  /// at [x] (the number sits to the left of the '%').
   void drawPercent(Framebuffer fb, int x, int y, int num) {
-    int rx = x;
     if (percent != null) {
-      rx -= percent!.width;
-      percent!.draw(fb, rx, y);
+      percent!.drawV(fb, x, y);
     }
-    drawNum(fb, rx, y, num);
+    drawNum(fb, x, y, num);
   }
 }
 
@@ -179,7 +180,7 @@ class HudFont {
         continue;
       }
       final Patch g = _glyphs[idx]!;
-      g.draw(fb, cx, y);
+      g.drawV(fb, cx, y);
       cx += g.width;
     }
     return cx;
