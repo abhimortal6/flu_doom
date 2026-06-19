@@ -211,6 +211,12 @@ void main() {
       }
       player.weaponOwned[Wp.fist] = 1;
       player.readyWeapon = Wp.pistol;
+      // The weapon is held ready (psprite at WEAPONTOP), not mid-lower; otherwise
+      // the downState overlay's A_Lower would complete in one P_SetPsprite step
+      // and clear pendingWeapon via P_BringUpWeapon. (COMBAT-D: spawnLevel now
+      // faithfully runs P_SetupPsprites, which leaves sy at WEAPONBOTTOM; reset
+      // it here so this isolated P_CheckAmmo test sees a ready weapon.)
+      player.psprites[psWeapon].sy = 32 * kFracUnit; // WEAPONTOP
       expect(pspr.checkAmmo(player), false);
       expect(player.pendingWeapon, Wp.fist);
       // Set the down-state overlay for the current (pistol) weapon.

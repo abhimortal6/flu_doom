@@ -343,7 +343,11 @@ class DoorManager {
   /// P_UseSpecialLine: dispatch a usable line's special. Door specials open;
   /// the rest are deferred (recorded but not enacted). Returns true if a door
   /// was activated. Faithful subset for the common manual-door specials.
-  bool useSpecialLine(Line line, Player player) {
+  ///
+  /// [player] is nullable so monster door-opening (P_UseSpecialLine called from
+  /// the AI with the monster as actor, no player_t) can reuse this path; the
+  /// manual-door subset here does not consult the player.
+  bool useSpecialLine(Line line, Player? player) {
     final int special = line.special;
     // Manual door specials in vanilla: 1, 26, 27, 28, 31, 32, 33, 34, 117, 118.
     const Set<int> manualDoor = <int>{1, 26, 27, 28, 31, 32, 33, 34, 117, 118};

@@ -4,23 +4,24 @@
 // The status bar / HUD only READ values; this adapter maps the live play-sim
 // [Player] fields onto the [PlayerStatus] contract (st_stuff.c source values).
 //
-// NOTE on the current play-sim slice: weapons/ammo/keys/powers are not yet
-// simulated (firing + pickups are deferred — see CONTRACTS_PLAY.md §4). The
-// player always starts with the vanilla initial loadout (fist + pistol, 50
-// bullets). This adapter therefore reports that fixed starting arsenal for the
-// inventory accessors while reflecting the LIVE health / armor / damage / bonus
-// / attack state from the simulation. When the play-sim grows real inventory
-// fields, swap the synthesized values for the real arrays — the interface is
-// unchanged.
+// COMBAT-D: now that the play-sim simulates real combat (firing, pickups,
+// weapon switching), this adapter reads the LIVE inventory fields directly —
+// health / armor / readyWeapon / weaponOwned / ammo / maxAmmo / readyWeaponAmmo
+// / cards / powers / damageCount / bonusCount / isDead. The HUD therefore
+// reflects real pickups and ammo, not a synthesized starting loadout.
 
+import '../play/info_tables.dart';
 import '../play/player.dart';
 import '../state/interfaces.dart';
 
-/// Vanilla `maxammo[]` (am_clip, am_shell, am_cell, am_misl).
-const List<int> _maxAmmo = <int>[200, 50, 300, 50];
-
-/// Vanilla initial loadout ammo (player starts with 50 bullets).
-const List<int> _startAmmo = <int>[50, 0, 0, 0];
+/// powertype_t (doomdef.h) indices the HUD surfaces. [PowerType] only exposes
+/// invulnerability / strength / infrared; map them to the vanilla powers[]
+/// slots (pw_invulnerability=0, pw_strength=1, pw_infrared=5).
+const List<int> _powerSlot = <int>[
+  0, // PowerType.invulnerability -> pw_invulnerability
+  1, // PowerType.strength        -> pw_strength
+  5, // PowerType.infrared        -> pw_infrared
+];
 
 /// Read-only [PlayerStatus] over a play-sim [Player].
 class PlayerStatusAdapter implements PlayerStatus {
@@ -37,32 +38,32 @@ class PlayerStatusAdapter implements PlayerStatus {
   @override
   int get armorType => player.armorType;
 
-  // Pistol (slot 1) is the starting ready weapon. (Weapon switching is not yet
-  // simulated; readyweapon stays pistol.)
   @override
-  int get readyWeapon => 1;
+  int get readyWeapon => player.readyWeapon;
 
   @override
-  bool ownsWeapon(int slot) => slot == 0 || slot == 1; // fist + pistol.
+  bool ownsWeapon(int slot) => player.weaponOwned[slot] != 0;
 
   @override
-  int ammo(AmmoType type) => _startAmmo[type.index];
+  int ammo(AmmoType type) => player.ammo[type.index];
 
   @override
-  int maxAmmo(AmmoType type) => _maxAmmo[type.index];
-
-  // Pistol consumes clip (bullets).
-  @override
-  AmmoType? get readyWeaponAmmo => AmmoType.clip;
+  int maxAmmo(AmmoType type) => player.maxAmmo[type.index];
 
   @override
-  bool ownsCard(int index) => false; // No keys at level start.
+  AmmoType? get readyWeaponAmmo {
+    final int a = weaponInfo[player.readyWeapon].ammo;
+    return a == Am.noAmmo ? null : AmmoType.values[a];
+  }
 
   @override
-  int get fragCount => 0;
+  bool ownsCard(int index) => player.cards[index];
 
   @override
-  int powerTics(PowerType power) => 0;
+  int get fragCount => player.frags[0];
+
+  @override
+  int powerTics(PowerType power) => player.powers[_powerSlot[power.index]];
 
   @override
   int get damageCount => player.damageCount;

@@ -11,9 +11,17 @@ import '../world/defs.dart';
 import 'info_tables.dart';
 import 'mobj.dart';
 import 'mobj_flags.dart';
+import 'p_inter.dart' show maxAmmo;
 import 'p_mobj.dart';
+import 'p_pspr.dart';
 import 'player.dart';
 import 'state_num.dart';
+
+/// deh_initial_health (deh_misc.c default) — G_PlayerReborn starting health.
+const int _initialHealth = 100;
+
+/// deh_initial_bullets (deh_misc.c default) — G_PlayerReborn starting clip.
+const int _initialBullets = 50;
 
 /// Game skill, vanilla `skill_t`. Spawn filtering uses these.
 enum Skill { baby, easy, medium, hard, nightmare }
@@ -31,9 +39,49 @@ class Spawner {
   /// Deathmatch starts (recorded but unused in single-player). Vanilla.
   final List<MapThing> deathmatchStarts = <MapThing>[];
 
-  /// P_SpawnPlayer: spawn [player]'s mobj at [mthing], wire the back-reference
-  /// and set its initial view height. Faithful to vanilla.
-  Mobj spawnPlayer(MapThing mthing, Player player) {
+  /// P_SpawnPlayer: spawn [player]'s mobj at [mthing], wire the back-reference,
+  /// set its initial view height, apply the G_PlayerReborn loadout, and set up
+  /// the weapon psprites via [pspr] (P_SetupPsprites). Faithful to vanilla.
+  Mobj spawnPlayer(MapThing mthing, Player player, Pspr pspr) {
+    // -------------------------------------------------------------------
+    // G_PlayerReborn (g_game.c): reset the inventory to the starting loadout
+    // before spawning the mobj. (frags/kill/item counts are preserved across
+    // a reborn in vanilla; in this single-level playtest they start at 0.)
+    // -------------------------------------------------------------------
+    // don't do anything immediately
+    player.attackDown = true;
+    player.useDown = true;
+    player.playerState = PlayerState.live;
+    player.health = _initialHealth;
+    player.armorPoints = 0;
+    player.armorType = 0;
+    player.backpack = false;
+    player.readyWeapon = Wp.pistol;
+    player.pendingWeapon = Wp.pistol;
+    for (int i = 0; i < player.weaponOwned.length; i++) {
+      player.weaponOwned[i] = 0;
+    }
+    player.weaponOwned[Wp.fist] = 1;
+    player.weaponOwned[Wp.pistol] = 1;
+    for (int i = 0; i < player.ammo.length; i++) {
+      player.ammo[i] = 0;
+    }
+    player.ammo[Am.clip] = _initialBullets;
+    for (int i = 0; i < Am.numAmmo; i++) {
+      player.maxAmmo[i] = maxAmmo[i];
+    }
+    for (int i = 0; i < player.powers.length; i++) {
+      player.powers[i] = 0;
+    }
+    for (int i = 0; i < player.cards.length; i++) {
+      player.cards[i] = false;
+    }
+    player.extraLight = 0;
+    player.damageCount = 0;
+    player.bonusCount = 0;
+    player.refire = 0;
+    player.attacker = null;
+
     final fixed_t x = mthing.x << kFracBits;
     final fixed_t y = mthing.y << kFracBits;
     final Mobj mobj = mobjSim.spawnMobj(x, y, onFloorZ, Mt.player);
@@ -43,22 +91,16 @@ class Spawner {
     mobj.health = mobjInfo[Mt.player].spawnHealth;
 
     player.mo = mobj;
-    player.playerState = PlayerState.live;
     player.health = mobj.health;
     player.viewHeight = kViewHeight;
     player.deltaViewHeight = 0;
     player.bob = 0;
 
-    // Set up the player's initial weapon sprite (fist/pistol idle). Behaviour
-    // (firing) is deferred, but the psprite state is faithful.
-    player.psprites[psWeapon]
-      ..stateIndex = St.sPistol
-      ..tics = states[St.sPistol].tics
-      ..sx = kFracUnit
-      ..sy = kFracUnit;
-
     // Put the player mobj into the idle PLAY state.
     mobjSim.setMobjState(mobj, St.sPlay);
+
+    // P_SetupPsprites: bring up the ready (pistol) weapon sprite.
+    pspr.setupPsprites(player);
 
     return mobj;
   }
