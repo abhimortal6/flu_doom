@@ -107,6 +107,12 @@ class RenderState {
   /// extralight (weapon flash); 0 unless playsim adds it.
   int extraLight = 0;
 
+  /// fixedcolormap (r_main.c): a single colormap forced over the whole view
+  /// (invulnerability = the inverse map; light-amp goggles = full bright).
+  /// null = no fixed colormap (the common case). The psprite light path reads
+  /// it (R_DrawPSprite). Not yet driven by the playsim; stays null.
+  Uint8List? fixedColormap;
+
   // --- Clip / occlusion arrays (r_plane.c). ---
   /// floorclip starts SCREENHEIGHT (viewheight); ceilingclip starts -1.
   late final Int16List ceilingClip = Int16List(screenWidth);

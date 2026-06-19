@@ -23,6 +23,7 @@ import '../video/palette.dart';
 import 'bsp.dart';
 import 'draw.dart';
 import 'planes.dart';
+import 'psprite_source.dart';
 import 'render_state.dart';
 import 'segs.dart';
 import 'sprite_source.dart';
@@ -90,20 +91,26 @@ class Renderer {
   RenderState get state => _state;
 
   /// R_RenderPlayerView: render one frame from [world.viewpoint] into
-  /// [framebuffer], drawing the things supplied by [sprites].
+  /// [framebuffer], drawing the world things supplied by [sprites] and the
+  /// player weapon psprites supplied by [psprites].
   ///
   /// This is the per-frame integration entry point. Integration code calls it
   /// once inside the GameLoop's onRender hook after the playsim has written the
-  /// viewpoint.
-  void renderPlayerView([SpriteSource sprites = const EmptySpriteSource()]) {
+  /// viewpoint. [psprites] carries the player's `extralight` (R_SetupFrame reads
+  /// `player->extralight`) and the weapon/flash psprites drawn last
+  /// (R_DrawPlayerSprites). Pass nothing for a view with no weapon.
+  void renderPlayerView([
+    SpriteSource sprites = const EmptySpriteSource(),
+    PspriteSource psprites = const EmptyPspriteSource(),
+  ]) {
     final vp = world.viewpoint;
-    // R_SetupFrame.
+    // R_SetupFrame (vanilla copies extralight = player->extralight).
     _state.setupFrame(
       x: vp.x,
       y: vp.y,
       z: vp.z,
       angle: normAngle(vp.angle),
-      extraLight: 0,
+      extraLight: psprites.extraLight,
     );
     _draw.centerY = _state.centerY;
 
@@ -126,7 +133,7 @@ class Renderer {
     );
 
     _planes.drawPlanes(); // R_DrawPlanes
-    _things.drawMasked(sprites); // R_DrawMasked
+    _things.drawMasked(sprites, psprites); // R_DrawMasked (+ psprites)
   }
 
   int _resolveSkyTexture(World world) {

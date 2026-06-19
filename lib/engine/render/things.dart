@@ -18,11 +18,15 @@ import '../math/fixed.dart';
 import '../video/patch.dart';
 import '../../game/world/defs.dart';
 import 'draw.dart';
+import 'psprite_source.dart';
 import 'render_state.dart';
 import 'segs.dart';
 import 'sprite_source.dart';
 
 const int kMinZ = kFracUnit * 4;
+
+/// BASEYCENTER (r_things.c): SCREENHEIGHT/2 = 100. Psprite vertical anchor.
+const int kBaseYCenter = 100;
 
 /// vissprite_t.
 class _VisSprite {
@@ -73,6 +77,12 @@ class ThingRenderer {
   fixed_t _spryscale = 0;
   fixed_t _sprtopscreen = 0;
 
+  // R_DrawPlayerSprites / R_DrawPSprite scratch (avis is a stack var in vanilla).
+  final _VisSprite _psprVis = _VisSprite();
+  final List<PspriteRequest> _psprScratch = <PspriteRequest>[];
+  Int32List _psprLights = Int32List(kMaxLightScale);
+  bool _psprInvisible = false;
+
   /// R_ClearSprites.
   void clearSprites() {
     _visCount = 0;
@@ -89,8 +99,10 @@ class ThingRenderer {
     return _pool[_visCount++];
   }
 
-  /// R_DrawMasked: project + sort + draw all sprites, then masked midtextures.
-  void drawMasked(SpriteSource source) {
+  /// R_DrawMasked: project + sort + draw all sprites, then masked midtextures,
+  /// then the player weapon psprites on top of everything (R_DrawPlayerSprites).
+  void drawMasked(SpriteSource source,
+      [PspriteSource psprites = const EmptyPspriteSource()]) {
     _resolver = source.resolver;
     _scratch.clear();
     source.collect(_scratch);
@@ -113,7 +125,105 @@ class ThingRenderer {
         _renderMaskedSegRange(ds, ds.x1, ds.x2);
       }
     }
-    // psprites (player weapon) are drawn by the HUD layer, not here.
+    // draw the psprites on top of everything (vanilla R_DrawPlayerSprites;
+    // viewangleoffset is always 0 here — no side views).
+    _drawPlayerSprites(psprites);
+  }
+
+  // R_DrawPlayerSprites (r_things.c).
+  void _drawPlayerSprites(PspriteSource source) {
+    // get light level
+    int lightnum =
+        (source.sectorLightLevel >> kLightSegShift) + source.extraLight;
+    if (lightnum < 0) {
+      _psprLights = state.scaleLight[0];
+    } else if (lightnum >= kLightLevels) {
+      _psprLights = state.scaleLight[kLightLevels - 1];
+    } else {
+      _psprLights = state.scaleLight[lightnum];
+    }
+
+    // clip to screen bounds: mfloorclip = screenheightarray, mceilingclip =
+    // negonearray (every column: floor at viewheight, ceiling at -1).
+    _mFloorClip = state.screenHeightArray;
+    _mFloorClipBase = 0;
+    _mCeilingClip = state.negOneArray;
+    _mCeilingClipBase = 0;
+
+    _resolver = source.resolver;
+    _psprInvisible = source.invisible;
+
+    // add all active psprites
+    _psprScratch.clear();
+    source.collect(_psprScratch);
+    for (final PspriteRequest psp in _psprScratch) {
+      _drawPSprite(psp);
+    }
+  }
+
+  // R_DrawPSprite (r_things.c).
+  void _drawPSprite(PspriteRequest psp) {
+    // decide which patch to use (psprites always use rotation 0 / lump[0]).
+    final SpriteFrameInfo? fi = _resolver.frameInfo(psp.spriteNum, psp.frame, 0);
+    if (fi == null) return;
+    final Patch patch = Patch.fromBytes(Uint8List.fromList(fi.lumpPatchBytes));
+    final bool flip = fi.flip;
+
+    // calculate edges of the shape
+    // tx = psp->sx - (SCREENWIDTH/2)*FRACUNIT;
+    fixed_t tx = toInt32(psp.sx - (state.screenWidth ~/ 2) * kFracUnit);
+    tx = toInt32(tx - (patch.leftOffset << kFracBits));
+    int x1 = (state.centerXFrac + fixedMul(tx, state.pspriteScale)) >> kFracBits;
+    // off the right side
+    if (x1 > state.viewWidth) return;
+
+    tx = toInt32(tx + (patch.width << kFracBits));
+    int x2 =
+        ((state.centerXFrac + fixedMul(tx, state.pspriteScale)) >> kFracBits) -
+            1;
+    // off the left side
+    if (x2 < 0) return;
+
+    // store information in a vissprite
+    final _VisSprite vis = _psprVis;
+    // vis->texturemid = (BASEYCENTER<<FRACBITS) + FRACUNIT/2
+    //                   - (psp->sy - spritetopoffset[lump]);
+    vis.textureMid = toInt32(kBaseYCenter * kFracUnit +
+        kFracUnit ~/ 2 -
+        toInt32(psp.sy - (patch.topOffset << kFracBits)));
+    vis.x1 = x1 < 0 ? 0 : x1;
+    vis.x2 = x2 >= state.viewWidth ? state.viewWidth - 1 : x2;
+    vis.scale = state.pspriteScale; // <<detailshift (0)
+
+    if (flip) {
+      vis.xiScale = -state.pspriteIScale;
+      vis.startFrac = (patch.width << kFracBits) - 1;
+    } else {
+      vis.xiScale = state.pspriteIScale;
+      vis.startFrac = 0;
+    }
+
+    if (vis.x1 > x1) {
+      vis.startFrac = toInt32(vis.startFrac + vis.xiScale * (vis.x1 - x1));
+    }
+
+    vis.patch = patch;
+
+    if (_psprInvisible) {
+      // shadow draw
+      vis.colormap = null;
+    } else if (state.fixedColormap != null) {
+      // fixed color
+      vis.colormap = state.fixedColormap;
+    } else if (psp.fullBright) {
+      // full bright
+      vis.colormap = state.colormap.mapAt(0);
+    } else {
+      // local light
+      vis.colormap = state.colormap.mapAt(_psprLights[kMaxLightScale - 1]);
+    }
+
+    _drawVisSprite(vis, vis.x1, vis.x2);
   }
 
   // R_ProjectSprite.

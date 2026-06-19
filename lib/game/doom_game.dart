@@ -34,6 +34,7 @@ import '../ui/debug_overlay.dart';
 import '../ui/settings/controls_settings_screen.dart';
 import 'integration/key_state_bridge.dart';
 import 'integration/player_status_adapter.dart';
+import 'integration/psprite_adapter.dart';
 import 'integration/sprite_adapter.dart';
 import 'play/playsim.dart';
 import 'state/game_state.dart';
@@ -101,16 +102,20 @@ class _DoomGameState extends State<DoomGame>
       final PlaySim sim = PlaySim(World.fromWad(wad));
       sim.spawnLevel();
 
-      // Renderer + sprite adapter.
+      // Renderer + sprite adapters (world things + player weapon psprites).
       final Renderer renderer = Renderer(framebuffer: _fb, world: sim.world);
       final PlaySpriteAdapter sprites = PlaySpriteAdapter(sim, wad);
+      // Share the built sprites[] resolver with the psprite adapter.
+      final PlayPspriteAdapter psprites =
+          PlayPspriteAdapter(sim, sprites.spriteResolver);
 
       // Game state (status bar / HUD / automap / menu) with injected adapters.
       final GameState gs = GameState(GameStateConfig(
         wad: wad,
         world: sim.world,
         playerStatus: PlayerStatusAdapter(sim.player),
-        worldView: (Framebuffer fb) => renderer.renderPlayerView(sprites),
+        worldView: (Framebuffer fb) =>
+            renderer.renderPlayerView(sprites, psprites),
       ));
       // Jump straight into the level (this milestone boots into E1M1 rather
       // than the title/demo screen).

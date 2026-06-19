@@ -152,6 +152,10 @@ class PlaySpriteAdapter implements SpriteSource {
   final PlaySim _sim;
   final WadSpriteResolver _resolver;
 
+  /// The built `sprites[]` resolver, exposed so the psprite adapter can SHARE
+  /// it (R_InitSprites builds the table once for world things AND psprites).
+  WadSpriteResolver get spriteResolver => _resolver;
+
   @override
   SpriteResolver get resolver => _resolver;
 
