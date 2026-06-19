@@ -28,6 +28,7 @@ import 'p_doors.dart';
 import 'p_enemy.dart';
 import 'p_inter.dart';
 import 'p_lights.dart';
+import 'p_switch.dart';
 import 'p_map.dart';
 import 'p_mobj.dart';
 import 'p_pspr.dart';
@@ -48,7 +49,6 @@ class PlaySim {
     mobjSim = MobjSim(move, thinkers);
     playerSim = PlayerSim(mobjSim);
     spawner = Spawner(mobjSim);
-    doors = DoorManager(world.level, move, thinkers);
     lights = LightManager(world.level, thinkers);
     spriteSource = PlaySpriteSource(thinkers);
 
@@ -79,6 +79,11 @@ class PlaySim {
       ..playerInGame = <bool>[true];
     pspr = Pspr(mobjSim, shoot, sound)..gameMode = GameMode.shareware;
 
+    // Switch textures/buttons + the door/use manager. DoorManager needs the
+    // shared P_PathTraverse from [shoot], so it is built after [shoot]/[sound].
+    switches = SwitchManager(world.textures, sound);
+    doors = DoorManager(world.level, move, thinkers, shoot, switches, sound);
+
     // Register the real combat A_* bodies, then fill the rest with stubs.
     final ActionRegistry reg = ActionRegistry.instance;
     registerEnemyActions(reg, enemyAi, shoot, interactions);
@@ -106,7 +111,7 @@ class PlaySim {
 
     // MONSTER door-opening: P_UseSpecialLine for monsters -> the door manager.
     enemyAi.useSpecialLine = (Mobj actor, Line line, int side) =>
-        doors.useSpecialLine(line, actor.player as Player?);
+        doors.useSpecialLine(actor, line, side);
 
     // Teleport relocation for A_PainShootSkull / lost-soul spawn (P_TeleportMove
     // -> P_TryMove without the dropoff/blocking re-link). Use the plain move.
@@ -131,6 +136,7 @@ class PlaySim {
   late final PlayerSim playerSim;
   late final Spawner spawner;
   late final DoorManager doors;
+  late final SwitchManager switches;
   late final LightManager lights;
   late final PlaySpriteSource spriteSource;
 
@@ -211,6 +217,11 @@ class PlaySim {
     // A_* bodies registered, monster mobjs now think (A_Look/A_Chase/attacks)
     // and missiles/puffs/blood advance through states[].
     thinkers.runThinkers();
+
+    // P_UpdateSpecials (button countdown portion): revert pressed switch
+    // textures after BUTTONTIME. The rest of P_UpdateSpecials (flat/texture
+    // animation, scrollers, level timer) is out of scope for the playsim tic.
+    switches.tickButtons();
 
     levelTime++;
     _writeViewpoint();

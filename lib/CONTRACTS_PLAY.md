@@ -144,10 +144,24 @@ state vanilla does (`turnHeld` for turn acceleration).
   not implemented; pickups remain in the world.
 - **Damage / death / pain**: no `P_DamageMobj`, no health loss, no respawn;
   damage/bonus tint counters decay but are not raised.
-- **Switches / full line-special catalogue**: `P_UseSpecialLine` handles the
-  manual-door specials (1,26,27,28,31,32,33,34,117,118 → EV_VerticalDoor);
-  switch-texture toggling and tagged remote specials are deferred (no-op,
-  returns false). `EV_DoFloor` exists but is not yet wired to line crossings.
+- **Switches / full line-special catalogue**: `P_UseSpecialLine` is now the
+  FULL vanilla p_switch.c manual-use switch (ported faithfully). It handles all
+  manual-door specials (1,26,27,28,31,32,33,34,117,118 → EV_VerticalDoor, incl.
+  key-card lock checks), tagged/remote doors (29,42,50,61,63,103,111-116,
+  99/133-137 → EV_DoDoor / EV_DoLockedDoor), the level-exit switches (11/51 via
+  an injected exit hook), and the switch-texture swap + button timer
+  (`p_switch.dart`: P_ChangeSwitchTexture / P_StartButton / alphSwitchList /
+  the BUTTONTIME countdown run from the tic). `P_UseLines` + `PTR_UseTraverse`
+  are the faithful raycast over the shared `P_PathTraverse` (PT_ADDLINES), not a
+  hand-rolled blockmap scan — they stop at the first usable special or the first
+  blocking line. The floor/plat/ceiling/stairs SWITCH specials
+  (7,9,14,15,18,20,21,23,41,45,49,55,60,62,64-71,101,102,122,123,127,131,132,
+  138-140) are recognized by case but their EV_ bodies are NOT ported
+  (EV_DoFloor/EV_DoPlat/EV_DoCeiling/EV_BuildStairs/EV_DoDonut/EV_LightTurnOn);
+  they return false so the switch texture does not swap (vanilla only swaps on a
+  true return). None of those are USE specials on E1M1 (whose only USE specials
+  are 1 and 11). The pre-existing simplified `evDoFloor` mover remains for
+  future wiring.
 - **Sound propagation, intercepts/aiming (P_AimLineAttack), teleporters**:
   not implemented. `crossedSpecials` records crossed special lines after a
   successful move for a later wave to trigger (walkover specials).

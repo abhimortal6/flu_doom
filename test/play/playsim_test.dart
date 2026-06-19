@@ -127,8 +127,7 @@ void main() {
       final fixed_t startCeil = sec.ceilingHeight;
 
       // Activate via the door manager (EV_VerticalDoor) and tick it.
-      final bool opened = sim.doors.evVerticalDoor(door);
-      expect(opened, isTrue);
+      sim.doors.evVerticalDoor(door, sim.player.mo!);
       expect(sec.specialData, isNotNull);
 
       final TicCmd cmd = TicCmd();
