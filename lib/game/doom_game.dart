@@ -63,7 +63,7 @@ class _DoomGameState extends State<DoomGame>
   late final EventQueueActionSink _sink = EventQueueActionSink(_events);
   PlaySim? _sim;
   GameState? _gs;
-  Palette? _palette;
+  PlaypalSet? _palettes;
   KeyStateBridge? _keyBridge;
   GameLoop? _loop;
   ControlsSettingsStore? _store;
@@ -124,7 +124,9 @@ class _DoomGameState extends State<DoomGame>
         bytes.lengthInBytes,
       ));
 
-      final Palette palette = Palette.fromWad(wad);
+      // All 14 PLAYPAL palettes; ST_doPaletteStuff selects one per frame to
+      // tint the screen (damage red / pickup yellow / radsuit green).
+      final PlaypalSet palettes = PlaypalSet.fromWad(wad);
 
       // ---------------------------------------------------------------------
       // AUDIO: initialize the flutter_soloud backend and build the real
@@ -209,7 +211,7 @@ class _DoomGameState extends State<DoomGame>
       // than the title/demo screen).
       gs.enterLevel();
 
-      _palette = palette;
+      _palettes = palettes;
       _sim = sim;
       _gs = gs;
       _keyBridge = KeyStateBridge(_sink);
@@ -258,10 +260,13 @@ class _DoomGameState extends State<DoomGame>
   }
 
   Future<void> _present() async {
-    final Palette? palette = _palette;
-    if (palette == null || _decodingFrame) return;
+    final PlaypalSet? palettes = _palettes;
+    final GameState? gs = _gs;
+    if (palettes == null || gs == null || _decodingFrame) return;
     _decodingFrame = true;
     try {
+      // ST_doPaletteStuff: pick the damage/pickup/radsuit-tinted palette.
+      final Palette palette = palettes[gs.paletteIndex];
       final ui.Image img = await _fb.toImage(palette);
       final ui.Image? old = _frame;
       _frame = img;

@@ -77,4 +77,19 @@ class PlayerStatusAdapter implements PlayerStatus {
   @override
   bool get isDead =>
       player.health <= 0 || player.playerState == PlayerState.dead;
+
+  @override
+  int get ironfeetTics => player.powers[_pwIronfeet];
+
+  @override
+  int get paletteIndex => stPaletteIndex(
+        damageCount: player.damageCount,
+        bonusCount: player.bonusCount,
+        strengthTics: player.powers[_pwStrength],
+        ironfeetTics: player.powers[_pwIronfeet],
+      );
 }
+
+/// powertype_t (doomdef.h) slots ST_doPaletteStuff reads directly.
+const int _pwStrength = 1;
+const int _pwIronfeet = 3;

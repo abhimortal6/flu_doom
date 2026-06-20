@@ -124,6 +124,13 @@ class GameState {
 
   void _deferAction(GameAction a) => _action = a;
 
+  /// PLAYPAL palette index to tint the frame with this frame (ST_doPaletteStuff
+  /// in st_stuff.c is driven by ST_Drawer during GS_LEVEL). Outside the level
+  /// (intermission / finale / title) vanilla shows the base palette, so we
+  /// return 0 there.
+  int get paletteIndex =>
+      gamestate == GameStateType.level ? config.playerStatus.paletteIndex : 0;
+
   // ------------------------------------------------------------------
   // Public lifecycle the integration loop drives.
   // ------------------------------------------------------------------

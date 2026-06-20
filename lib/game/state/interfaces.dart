@@ -90,6 +90,71 @@ abstract interface class PlayerStatus {
 
   /// True if the player is dead (health <= 0); selects STFDEAD0.
   bool get isDead;
+
+  /// Active tics remaining for pw_ironfeet (the radiation suit). Drives the
+  /// green RADIATIONPAL screen tint (ST_doPaletteStuff). 0 = inactive.
+  int get ironfeetTics;
+
+  /// PLAYPAL palette index for this frame, computed exactly as vanilla
+  /// ST_doPaletteStuff (st_stuff.c):
+  ///   - damagecount (and the fading berserk pw_strength flash) -> red 1..8
+  ///   - else bonuscount -> yellow 9..12
+  ///   - else pw_ironfeet (radsuit, >4*32 or the low-bit blink) -> green 13
+  ///   - else 0 (base palette)
+  int get paletteIndex;
+}
+
+// --- ST_doPaletteStuff palette-band constants (st_stuff.c). ---
+
+/// STARTREDPALS: first red damage palette index.
+const int kStartRedPals = 1;
+
+/// NUMREDPALS: count of red damage palettes (1..8).
+const int kNumRedPals = 8;
+
+/// STARTBONUSPALS: first yellow pickup palette index.
+const int kStartBonusPals = 9;
+
+/// NUMBONUSPALS: count of yellow pickup palettes (9..12).
+const int kNumBonusPals = 4;
+
+/// RADIATIONPAL: the green radiation-suit palette index.
+const int kRadiationPal = 13;
+
+/// ST_doPaletteStuff palette selection (st_stuff.c), as a pure function so both
+/// the live adapter and tests share one implementation. [damageCount],
+/// [bonusCount], [strengthTics] (pw_strength) and [ironfeetTics] (pw_ironfeet)
+/// are the raw player_t values. Returns the PLAYPAL index 0..13.
+int stPaletteIndex({
+  required int damageCount,
+  required int bonusCount,
+  required int strengthTics,
+  required int ironfeetTics,
+}) {
+  int cnt = damageCount;
+
+  if (strengthTics != 0) {
+    // slowly fade the berserk out
+    final int bzc = 12 - (strengthTics >> 6);
+    if (bzc > cnt) cnt = bzc;
+  }
+
+  int palette;
+  if (cnt != 0) {
+    palette = (cnt + 7) >> 3;
+    if (palette >= kNumRedPals) palette = kNumRedPals - 1;
+    palette += kStartRedPals;
+  } else if (bonusCount != 0) {
+    palette = (bonusCount + 7) >> 3;
+    if (palette >= kNumBonusPals) palette = kNumBonusPals - 1;
+    palette += kStartBonusPals;
+  } else if (ironfeetTics > 4 * 32 || (ironfeetTics & 8) != 0) {
+    palette = kRadiationPal;
+  } else {
+    palette = 0;
+  }
+
+  return palette;
 }
 
 /// Per-player end-of-level stats for the intermission (wi_stuff). The

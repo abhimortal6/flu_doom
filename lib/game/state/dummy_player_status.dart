@@ -87,4 +87,18 @@ class DummyPlayerStatus implements PlayerStatus {
 
   @override
   bool get isDead => health <= 0;
+
+  /// pw_ironfeet (radiation suit) tics. Settable in tests.
+  int ironfeet = 0;
+
+  @override
+  int get ironfeetTics => ironfeet;
+
+  @override
+  int get paletteIndex => stPaletteIndex(
+        damageCount: damageCount,
+        bonusCount: bonusCount,
+        strengthTics: powers[PowerType.strength] ?? 0,
+        ironfeetTics: ironfeet,
+      );
 }

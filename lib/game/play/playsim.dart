@@ -166,6 +166,9 @@ class PlaySim {
         (Mobj special, Mobj toucher) =>
             interactions.touchSpecialThing(special, toucher);
 
+    // P_DropWeapon on player death (P_KillMobj player branch -> p_pspr.c).
+    interactions.onDropWeapon = (Player p) => pspr.dropWeapon(p);
+
     // Drive weapon firing + weapon-change from the player think path.
     playerSim.pspr = pspr;
     // Wake monsters when the player fires (vanilla P_FireWeapon noise alert).
@@ -304,6 +307,23 @@ class PlaySim {
     _writeViewpoint();
   }
 
+  /// G_DoReborn (g_game.c, single-player branch): the player died and requested
+  /// a respawn (PST_REBORN). In single-player vanilla sets gameaction =
+  /// ga_loadlevel, reloading the CURRENT map from scratch. Reloading re-spawns
+  /// the player via [spawnLevel] -> [Spawner.spawnPlayer], which applies the
+  /// full G_PlayerReborn loadout (health 100, fist + pistol, 50 clip, and all
+  /// other weapons / ammo / keys / powers / armor cleared). This is distinct
+  /// from [loadLevel], which CARRIES inventory across a level *completion* —
+  /// death loses inventory in single-player.
+  void doReborn() {
+    // Reload the level from scratch (single-player). Rebuild the subsystems
+    // against the freshly reloaded geometry and re-spawn the reset player.
+    world.changeLevel(world.level.name);
+    _buildSubsystems();
+    spawnLevel();
+    _writeViewpoint();
+  }
+
   /// Intermission totals for the CURRENTLY loaded level (vanilla totalkills /
   /// totalitems / totalsecret). Read when building the wbstartstruct.
   int get totalKills => spawner.totalKills;
@@ -336,6 +356,15 @@ class PlaySim {
     if (player.mo != null && !player.mo!.removed) {
       playerSim.advanceTime();
       playerSim.playerThink(player);
+    }
+
+    // G_Ticker reborn check (g_game.c): a dead player that pressed USE this tic
+    // is now PST_REBORN -> G_DoReborn reloads the current map and re-spawns the
+    // reset player. We do this BEFORE running the remaining thinkers so the rest
+    // of this tic operates on the freshly reloaded level.
+    if (player.playerState == PlayerState.reborn) {
+      doReborn();
+      return;
     }
 
     // Run every thinker (mobjs, doors, plats, floors, lights). With the real

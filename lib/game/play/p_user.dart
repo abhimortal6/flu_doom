@@ -7,6 +7,7 @@
 
 import '../../engine/math/angle.dart';
 import '../../engine/math/fixed.dart';
+import '../../engine/math/tables.dart';
 import '../world/ticcmd.dart';
 import 'info_tables.dart';
 import 'mobj.dart';
@@ -15,6 +16,12 @@ import 'p_mobj.dart';
 import 'p_pspr.dart' show Pspr, GameMode;
 import 'player.dart';
 import 'state_num.dart';
+
+/// ANG5 (p_user.c): `(ANG90/18)`. The death-think turn-to-killer step.
+const angle_t kAng5 = kAng90 ~/ 18;
+
+/// deathViewHeight: `6*FRACUNIT`, the height P_DeathThink lowers the view to.
+const fixed_t kDeathViewHeight = 6 * kFracUnit;
 
 /// MAXBOB (fixed_t, 16 units). Vanilla P_CalcHeight cap.
 const fixed_t kMaxBob = 0x100000;
@@ -67,13 +74,12 @@ class PlayerSim {
         (fixedMul(mo.momX, mo.momX) >> 2) + (fixedMul(mo.momY, mo.momY) >> 2));
     if (player.bob > kMaxBob) player.bob = kMaxBob;
 
-    if (player.playerState == PlayerState.dead) {
-      player.viewZ = toInt32(mo.z + (6 * kFracUnit));
-      if (player.viewZ > toInt32(mo.ceilingZ - 4 * kFracUnit)) {
-        player.viewZ = toInt32(mo.ceilingZ - 4 * kFracUnit);
-      }
-      return;
-    }
+    // Vanilla P_CalcHeight has NO PST_DEAD special case: the dead view-lowering
+    // is driven entirely by P_DeathThink decrementing viewheight toward
+    // 6*FRACUNIT, and the viewz then follows `mo.z + viewheight (+ bob)`. (The
+    // vanilla CF_NOMOMENTUM / !onground branch is a cheat/airborne path; for a
+    // grounded dead corpse with ~0 momentum the bob term is ~0, so the normal
+    // path below reproduces it. The PST_LIVE guard prevents the auto-rise.)
 
     // Bob the view using a sine of the level time. We track an internal phase.
     final int angle = (kFineAngles ~/ 20 * _leveltime) & kFineMask;
@@ -130,14 +136,68 @@ class PlayerSim {
   /// Advance the internal bob phase clock (called once per tic by the sim).
   void advanceTime() => _leveltime++;
 
+  /// P_DeathThink (p_user.c). Lowers the view to the corpse height, turns to
+  /// face the attacker, fades the damage flash, and watches for BT_USE -> the
+  /// reborn request. Ported 1:1.
+  void deathThink(Player player) {
+    final Mobj mo = player.mo!;
+
+    // P_MovePsprites (lower/idle the dropped weapon sprite).
+    pspr?.movePsprites(player);
+
+    // fall to the ground
+    if (player.viewHeight > kDeathViewHeight) {
+      player.viewHeight = toInt32(player.viewHeight - kFracUnit);
+    }
+    if (player.viewHeight < kDeathViewHeight) {
+      player.viewHeight = kDeathViewHeight;
+    }
+
+    player.deltaViewHeight = 0;
+    // onground = (player->mo->z <= player->mo->floorz); (file-scope global in
+    // vanilla, only read by P_CalcHeight's bob path which the dead branch of
+    // calcHeight skips — no observable effect here.)
+    calcHeight(player);
+
+    if (player.attacker != null && player.attacker != mo) {
+      final angle_t angle = _pointToAngle2(
+          mo.x, mo.y, player.attacker!.x, player.attacker!.y);
+
+      final angle_t delta = normAngle(angle - mo.angle);
+
+      if (delta < kAng5 || delta > normAngle(-kAng5)) {
+        // Looking at killer, so fade damage flash down.
+        mo.angle = angle;
+
+        if (player.damageCount != 0) {
+          player.damageCount--;
+        }
+      } else if (delta < kAng180) {
+        mo.angle = normAngle(mo.angle + kAng5);
+      } else {
+        mo.angle = normAngle(mo.angle - kAng5);
+      }
+    } else if (player.damageCount != 0) {
+      player.damageCount--;
+    }
+
+    if ((player.cmd.buttons & btUse) != 0) {
+      player.playerState = PlayerState.reborn;
+    }
+  }
+
   /// P_PlayerThink: full per-tic player update. Applies the supplied command
   /// (already copied into player.cmd by the caller).
   void playerThink(Player player) {
     final Mobj mo = player.mo!;
 
-    // Dead players: just calc height; respawn handling deferred.
+    // (player->cheats & CF_NOCLIP: cheats not modelled; omitted.)
+    // (MF_JUSTATTACKED chainsaw-run cmd override: handled inside movePlayer's
+    // running-animation path; the cmd-override is omitted as the saw run is a
+    // cosmetic forward nudge not yet threaded here.)
+
     if (player.playerState == PlayerState.dead) {
-      calcHeight(player);
+      deathThink(player);
       return;
     }
 
@@ -255,6 +315,51 @@ class PlayerSim {
 
     // Mark the player solid/shootable consistent with vanilla (no-op if set).
     mo.flags |= mfSolid;
+  }
+
+  // -----------------------------------------------------------------------
+  // R_PointToAngle2 (r_main.c) — ported locally so the play-sim need not
+  // depend on the renderer. Identical octant logic.
+  // -----------------------------------------------------------------------
+  static angle_t _pointToAngle2(
+      fixed_t x1, fixed_t y1, fixed_t x2, fixed_t y2) {
+    int x = toInt32(x2 - x1);
+    int y = toInt32(y2 - y1);
+
+    if (x == 0 && y == 0) return 0;
+
+    if (x >= 0) {
+      if (y >= 0) {
+        if (x > y) {
+          return tantoangle[slopeDiv(y, x)];
+        } else {
+          return normAngle(kAng90 - 1 - tantoangle[slopeDiv(x, y)]);
+        }
+      } else {
+        y = -y;
+        if (x > y) {
+          return normAngle(-tantoangle[slopeDiv(y, x)]);
+        } else {
+          return normAngle(kAng270 + tantoangle[slopeDiv(x, y)]);
+        }
+      }
+    } else {
+      x = -x;
+      if (y >= 0) {
+        if (x > y) {
+          return normAngle(kAng180 - 1 - tantoangle[slopeDiv(y, x)]);
+        } else {
+          return normAngle(kAng90 + tantoangle[slopeDiv(x, y)]);
+        }
+      } else {
+        y = -y;
+        if (x > y) {
+          return normAngle(kAng180 + tantoangle[slopeDiv(y, x)]);
+        } else {
+          return normAngle(kAng270 - 1 - tantoangle[slopeDiv(x, y)]);
+        }
+      }
+    }
   }
 }
 

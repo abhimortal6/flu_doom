@@ -79,6 +79,11 @@ class Interactions {
   final MobjSim mobjSim;
   final SoundHook sound;
 
+  /// P_DropWeapon hook (p_pspr.c). Invoked from P_KillMobj's player branch.
+  /// The Pspr driver lives one layer up (PlaySim), so the integration injects
+  /// this. No-op if unset (a stand-alone interactions test).
+  void Function(Player player)? onDropWeapon;
+
   // -----------------------------------------------------------------------
   // GET STUFF
   // -----------------------------------------------------------------------
@@ -607,7 +612,14 @@ class Interactions {
 
       target.flags &= ~mfSolid;
       tp.playerState = PlayerState.dead;
-      // P_DropWeapon (COMBAT-B owns Pspr); the play-sim wiring drives it.
+      // P_DropWeapon (COMBAT-B owns Pspr); the play-sim wiring drives it via
+      // the injected hook.
+      onDropWeapon?.call(tp);
+
+      // (target->player == &players[consoleplayer] && automapactive ->
+      // AM_Stop(): the automap-lowering on death is owned by the game-state
+      // layer; not driven from the play-sim. Omitted, as vanilla notes
+      // optional.)
     }
 
     if (target.health < -target.info.spawnHealth &&

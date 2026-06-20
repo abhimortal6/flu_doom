@@ -42,6 +42,43 @@ class Palette {
   static const int paletteCount = 14;
 }
 
+/// All 14 PLAYPAL palettes (st_stuff.c selects among them per frame):
+///   0           : base/normal
+///   1..8        : red damage tints (STARTREDPALS, NUMREDPALS)
+///   9..12       : yellow bonus/pickup tints (STARTBONUSPALS, NUMBONUSPALS)
+///   13          : green radiation-suit tint (RADIATIONPAL)
+///
+/// The framebuffer->image path picks a [Palette] from [palettes] by the index
+/// computed by ST_doPaletteStuff so damage/pickup/radsuit screens tint the view.
+class PlaypalSet {
+  PlaypalSet(this.palettes)
+      : assert(palettes.length == Palette.paletteCount);
+
+  /// The 14 converted palettes, indexed 0..13.
+  final List<Palette> palettes;
+
+  /// Palette by index, clamped to the valid range for safety.
+  Palette operator [](int index) {
+    if (index < 0) index = 0;
+    if (index >= palettes.length) index = palettes.length - 1;
+    return palettes[index];
+  }
+
+  /// Build all 14 palettes from a raw PLAYPAL lump.
+  factory PlaypalSet.fromPlaypal(Uint8List playpal) {
+    final List<Palette> out = List<Palette>.generate(
+      Palette.paletteCount,
+      (int i) => Palette.fromPlaypal(playpal, paletteIndex: i),
+      growable: false,
+    );
+    return PlaypalSet(out);
+  }
+
+  /// Convenience: load all palettes from a WAD's PLAYPAL lump.
+  factory PlaypalSet.fromWad(WadFile wad) =>
+      PlaypalSet.fromPlaypal(wad.getLump('PLAYPAL').bytes);
+}
+
 /// COLORMAP: index-remap tables for light diminishing and special effects.
 class Colormap {
   Colormap(this.maps, this.numMaps);
