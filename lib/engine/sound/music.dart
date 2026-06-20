@@ -2,9 +2,11 @@
 // OPL3 audio, plus the per-game-state song selection tables.
 //
 // Pipeline (per song):
-//   WAD D_<name> (MUS) --mus2mid--> standard MIDI --MidiFile.parse--> tracks
-//     --OplPlayer (i_oplmusic.c)--> OPL3 register writes --Opl3.generateStream
-//     --> interleaved-stereo PCM --> WAV --> AudioEngine.playMusic(looping).
+//   WAD D_<name> (MUS or MIDI) --header sniff (I_OPL_RegisterSong)--> standard
+//     MIDI (mus2mid for MUS lumps, passthrough for MThd lumps like Freedoom's)
+//     --MidiFile.parse--> tracks --OplPlayer (i_oplmusic.c)--> OPL3 register
+//     writes --Opl3.generateStream--> interleaved-stereo PCM --> WAV
+//     --> AudioEngine.playMusic(looping).
 //
 // SELECTION TABLES (ported from s_sound.c + sounds.c):
 //   - S_music[] : the musicenum_t -> "d_"+name lump-name table (musicForId).
@@ -161,13 +163,37 @@ const int _kMaxRenderSeconds = 120;
 /// Rendering still runs in an isolate, so the UI never stalls regardless.
 const int kDefaultMaxRenderSeconds = 35;
 
-/// Render a MUS lump to an interleaved-stereo 16-bit WAV buffer through the full
-/// mus2mid -> MIDI -> OplPlayer -> Opl3 pipeline. Pure/synchronous; safe to run
-/// in an isolate. Returns null on any failure (never throws).
+/// Sniff a music lump header and return standard MIDI bytes, faithfully to
+/// I_OPL_RegisterSong (i_oplmusic.c). DMX MUS lumps ('M','U','S',0x1a) are
+/// converted via mus2mid; standard MIDI lumps ('M','T','h','d', e.g. Freedoom's
+/// D_* music) are passed through unchanged. Anything else is unsupported and
+/// returns null (no throw). Mirrors IsMid()/MUS_HEADER_MAGIC in vanilla.
+Uint8List? _toMidiBytes(Uint8List data) {
+  if (data.length < 4) return null;
+  // MUS magic: 'M','U','S',0x1a -> convert to MIDI (the shareware Doom path).
+  if (data[0] == 0x4D && data[1] == 0x55 && data[2] == 0x53 && data[3] == 0x1A) {
+    return mus2mid(data);
+  }
+  // MIDI magic: 'M','T','h','d' -> already standard MIDI; use the bytes directly
+  // (this is the Freedoom path — vanilla's IsMid() does exactly this).
+  if (data[0] == 0x4D && data[1] == 0x54 && data[2] == 0x68 && data[3] == 0x64) {
+    return data;
+  }
+  // Unknown header: unsupported. Return null so the caller stays silent.
+  return null;
+}
+
+/// Render a music lump (DMX MUS or standard MIDI) to an interleaved-stereo
+/// 16-bit WAV buffer through the full sniff -> [mus2mid] (MUS only) -> MIDI ->
+/// OplPlayer -> Opl3 pipeline. The header is sniffed exactly like vanilla
+/// I_OPL_RegisterSong: MUS lumps are converted, MIDI lumps pass straight
+/// through. Pure/synchronous; safe to run in an isolate. Returns null on any
+/// failure or unsupported header (never throws).
 Uint8List? renderMusToWav(Uint8List mus, Uint8List genmidiLump, int sampleRate,
     {int maxSeconds = _kMaxRenderSeconds}) {
   try {
-    final Uint8List midiBytes = mus2mid(mus);
+    final Uint8List? midiBytes = _toMidiBytes(mus);
+    if (midiBytes == null) return null; // unsupported header -> silent.
     final MidiFile file = MidiFile.parse(midiBytes);
     final GenMidi genmidi = GenMidi.parse(genmidiLump);
 

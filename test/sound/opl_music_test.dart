@@ -182,6 +182,93 @@ void main() {
     });
   });
 
+  group('header sniff: MUS vs MIDI (faithful to I_OPL_RegisterSong)', () {
+    test('Freedoom D_E1M1 is a standard MIDI (MThd) lump and renders NON-SILENT',
+        () {
+      final File f = File('assets/freedoom1.wad');
+      expect(f.existsSync(), true,
+          reason: 'assets/freedoom1.wad must be present');
+      final WadFile fwad = WadFile.fromBytes(f.readAsBytesSync());
+
+      final Lump gmLump = fwad.getLump('GENMIDI');
+      final Lump midiLump = fwad.getLump('D_E1M1');
+
+      // The lump is real MIDI (header 'MThd'), NOT DMX MUS ('MUS\x1a').
+      final Uint8List lb = Uint8List.fromList(midiLump.bytes);
+      expect(String.fromCharCodes(lb.sublist(0, 4)), 'MThd',
+          reason: 'Freedoom music lumps are standard MIDI');
+
+      final Uint8List? wav = renderMusToWav(
+        lb,
+        Uint8List.fromList(gmLump.bytes),
+        kMusicSampleRate,
+      );
+      expect(wav, isNotNull,
+          reason: 'MIDI lump must render via the passthrough path');
+
+      // Valid WAV + real, substantially non-silent audio.
+      expect(String.fromCharCodes(wav!.sublist(0, 4)), 'RIFF');
+      expect(wav.length, greaterThan(44 + kMusicSampleRate));
+      final int peak = _peakAmplitude(wav);
+      final int nonSilent = _nonSilentSamples(wav);
+      expect(peak, greaterThan(500),
+          reason: 'Freedoom MIDI render should have real amplitude');
+      expect(nonSilent, greaterThan(1000),
+          reason: 'Freedoom MIDI render should be substantially non-silent');
+    });
+
+    test('Freedoom D_E1M1 MIDI render is DETERMINISTIC (byte-identical)', () {
+      final WadFile fwad =
+          WadFile.fromBytes(File('assets/freedoom1.wad').readAsBytesSync());
+      final Lump gmLump = fwad.getLump('GENMIDI');
+      final Uint8List lb = Uint8List.fromList(fwad.getLump('D_E1M1').bytes);
+      final Uint8List gm = Uint8List.fromList(gmLump.bytes);
+      final Uint8List a = renderMusToWav(lb, gm, kMusicSampleRate)!;
+      final Uint8List b = renderMusToWav(lb, gm, kMusicSampleRate)!;
+      expect(a.length, b.length);
+      expect(a, orderedEquals(b));
+    });
+
+    test('shareware MUS lump (doom1 D_E1M1) STILL renders NON-SILENT (no regression)',
+        () {
+      final Lump gmLump = wad.getLump('GENMIDI');
+      final Lump musLump = wad.getLump('D_E1M1');
+      final Uint8List lb = Uint8List.fromList(musLump.bytes);
+      // The shareware lump is DMX MUS ('MUS\x1a'), the mus2mid path.
+      expect(lb[0], 0x4D);
+      expect(lb[1], 0x55);
+      expect(lb[2], 0x53);
+      expect(lb[3], 0x1A);
+
+      final Uint8List? wav =
+          renderMusToWav(lb, Uint8List.fromList(gmLump.bytes), kMusicSampleRate);
+      expect(wav, isNotNull);
+      expect(_peakAmplitude(wav!), greaterThan(500));
+      expect(_nonSilentSamples(wav), greaterThan(1000));
+    });
+
+    test('unknown header returns null silently (no throw, no crash)', () {
+      final Lump gmLump = wad.getLump('GENMIDI');
+      // A buffer with neither 'MUS\x1a' nor 'MThd' must be rejected gracefully.
+      final Uint8List junk =
+          Uint8List.fromList(<int>[0x00, 0x01, 0x02, 0x03, 0x04, 0x05, 0x06, 0x07]);
+      Uint8List? wav;
+      expect(
+        () => wav = renderMusToWav(
+            junk, Uint8List.fromList(gmLump.bytes), kMusicSampleRate),
+        returnsNormally,
+      );
+      expect(wav, isNull, reason: 'unsupported header -> null, never crash');
+
+      // A too-short buffer is also rejected without throwing.
+      expect(
+        () => renderMusToWav(Uint8List.fromList(<int>[0x4D]),
+            Uint8List.fromList(gmLump.bytes), kMusicSampleRate),
+        returnsNormally,
+      );
+    });
+  });
+
   group('MusicEngine graceful behaviour', () {
     test('disabled (uninitialized audio) engine is a silent no-op', () async {
       final _FakeAudioEngine audio = _FakeAudioEngine(initialized: false);
