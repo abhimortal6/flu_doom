@@ -31,6 +31,7 @@ import '../engine/system/gameloop.dart';
 import '../engine/video/framebuffer.dart';
 import '../engine/video/palette.dart';
 import '../engine/video/video_view.dart';
+import '../engine/video/wipe.dart';
 import '../engine/wad/wad.dart';
 import '../input_actions/action_dispatcher.dart';
 import '../input_actions/action_keyboard_listener.dart';
@@ -102,6 +103,14 @@ class _DoomGameState extends State<DoomGame>
   ui.Image? _frame;
   bool _decodingFrame = false;
   bool _ready = false;
+
+  // ---- Screen-melt wipe (f_wipe.c / D_Display driving logic) ----
+  // wipegamestate tracks the last *presented* gamestate; when gs.gamestate
+  // differs we trigger a melt (D_Display's `wipe = gamestate != wipegamestate`).
+  // While [_wipe] is non-null the melt runs across frames and game logic is
+  // FROZEN (vanilla blocks in D_RunFrame until the wipe completes).
+  GameStateType? _wipegamestate;
+  WipeMelt? _wipe;
   bool _showDebug = false;
   String? _error;
 
@@ -282,6 +291,9 @@ class _DoomGameState extends State<DoomGame>
       _sim = sim;
       _gs = gs;
       _keyBridge = KeyStateBridge(_sink);
+      // wipegamestate starts at the boot state (GS_DEMOSCREEN), matching the
+      // first presented frame so no spurious wipe fires before any transition.
+      _wipegamestate = gs.gamestate;
 
       _loop = GameLoop(vsync: this, onTic: _onTic, onRender: _onRender);
       _ready = true;
@@ -300,6 +312,11 @@ class _DoomGameState extends State<DoomGame>
     final PlaySim? sim = _sim;
     final KeyStateBridge? bridge = _keyBridge;
     if (gs == null || sim == null || bridge == null) return;
+
+    // FREEZE game logic/ticking while a melt is in progress (vanilla blocks in
+    // D_RunFrame until wipe_ScreenWipe reports done before resuming play). We
+    // still keep events queued; they are drained once the wipe finishes.
+    if (_wipe != null) return;
 
     // Drain this tic's input events once.
     final List<DoomEvent> evs = _events.drain();
@@ -322,6 +339,43 @@ class _DoomGameState extends State<DoomGame>
   void _onRender() {
     final GameState? gs = _gs;
     if (gs == null) return;
+
+    // --- Screen-melt wipe driver (D_Display + D_RunFrame logic) ---
+    final WipeMelt? wipe = _wipe;
+    if (wipe != null) {
+      // A melt is running: advance it one tic (wipe_ScreenWipe with ticks==1),
+      // compose the melted frame into the live framebuffer, and present that.
+      // Game logic stays frozen (see _onTic) until the melt completes.
+      final bool done = wipe.update();
+      wipe.compose(_fb);
+      _present();
+      if (done) {
+        // Melt finished: resume normal rendering from the next frame. The new
+        // screen is now fully shown; mark it as the presented gamestate.
+        _wipe = null;
+        _wipegamestate = gs.gamestate;
+      }
+      return;
+    }
+
+    // Detect a gamestate transition that should wipe. At this point _fb still
+    // holds the PREVIOUSLY presented frame (the wipe START screen).
+    if (gs.gamestate != _wipegamestate) {
+      // Capture the old (currently-presented) screen as the START screen.
+      final Uint8List startBytes = Uint8List.fromList(_fb.pixels);
+      // Render the NEW screen into _fb as the END screen.
+      gs.render(_fb);
+      final Uint8List endBytes = Uint8List.fromList(_fb.pixels);
+      // Begin the melt (wipe_StartScreen + wipe_EndScreen + wipe_initMelt). The
+      // first composed frame is ~all-START; subsequent update()s melt to END.
+      final WipeMelt melt = WipeMelt.start(startBytes, endBytes);
+      melt.compose(_fb); // present the all-old first frame
+      _wipe = melt;
+      _present();
+      return;
+    }
+
+    // Normal frame: render the live screen and present.
     gs.render(_fb);
     _present();
   }
