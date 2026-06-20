@@ -314,6 +314,56 @@ class PlaySim {
     _writeViewpoint();
   }
 
+  /// G_InitNew + G_DoLoadLevel (g_game.c): start a BRAND-NEW game on
+  /// (episode, map) at [newSkill]. Unlike [loadLevel] (which CARRIES the
+  /// inventory across a level *completion*) and [doReborn] (which reloads the
+  /// CURRENT map after death), this is a full fresh start:
+  ///
+  ///   - G_InitNew sets gameskill/gameepisode/gamemap and forces every player to
+  ///     PST_REBORN; G_DoLoadLevel then P_SetupLevels the map, where
+  ///     P_SpawnPlayer applies the full G_PlayerReborn loadout (health 100,
+  ///     fist + pistol, 50 clip, everything else cleared).
+  ///   - M_ClearRandom resets the gameplay RNG (done inside [spawnLevel]).
+  ///   - leveltime / intermission totals reset (done inside [spawnLevel]).
+  ///
+  /// All listed episodes are selectable from the menu; G_InitNew clamps
+  /// [episode] to 1..3 and [map] to 1..9 (vanilla non-commercial clamps). If the
+  /// resolved map lump is ABSENT from the loaded WAD (e.g. doom1.wad has only
+  /// episode 1), this falls back to E1M1 so a new game always starts rather than
+  /// crashing on a missing map. No inventory is snapshotted/restored: a new game
+  /// starts the player from scratch.
+  void newGame(int episode, int newSkill, int map) {
+    // G_InitNew clamps (gamemode != commercial branch): episode 1..3, map 1..9.
+    int ep = episode;
+    if (ep < 1) ep = 1;
+    if (ep > 3) ep = 3;
+    int mp = map;
+    if (mp < 1) mp = 1;
+    if (mp > 9) mp = 9;
+
+    // gameskill (clamped to the valid skill range).
+    int sk = newSkill;
+    if (sk < 0) sk = 0;
+    if (sk > Skill.values.length - 1) sk = Skill.values.length - 1;
+    skill = Skill.values[sk];
+
+    // Resolve the target map; fall back to E1M1 if its lump is missing from the
+    // loaded WAD (doom1.wad ships episode 1 only, but the menu offers all three).
+    String name = 'E${ep}M$mp';
+    if (world.wad.lumpNumForName(name) < 0) {
+      name = 'E1M1';
+    }
+
+    // G_DoLoadLevel: load the map fresh and rebuild every level-dependent
+    // subsystem against the new geometry. spawnLevel() then re-spawns the player
+    // via the full G_PlayerReborn loadout (NOT carrying inventory), resets
+    // leveltime + the intermission totals, and M_ClearRandoms the RNG.
+    world.changeLevel(name);
+    _buildSubsystems();
+    spawnLevel();
+    _writeViewpoint();
+  }
+
   /// G_DoReborn (g_game.c, single-player branch): the player died and requested
   /// a respawn (PST_REBORN). In single-player vanilla sets gameaction =
   /// ga_loadlevel, reloading the CURRENT map from scratch. Reloading re-spawns

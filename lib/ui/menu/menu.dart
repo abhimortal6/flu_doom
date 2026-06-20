@@ -11,7 +11,15 @@ import '../../engine/input/doomkeys.dart';
 import '../../engine/input/event.dart';
 import '../../engine/video/framebuffer.dart';
 import '../../engine/video/patch.dart';
+import '../hud/fonts.dart';
 import '../hud/graphics_cache.dart';
+
+/// SWSTRING (d_englsh.h): shown when a shareware player picks an episode beyond
+/// episode 1 (vanilla M_Episode -> M_StartMessage(SWSTRING)).
+const String _swString =
+    'This is the shareware version of doom.\n\n'
+    'You need to order the entire trilogy.\n\n'
+    'Press a key.';
 
 /// A single selectable menu item.
 class MenuItem {
@@ -63,14 +71,31 @@ class MenuDef {
 
 /// Drives the menu state machine and draws it.
 class MenuController {
-  MenuController(this._gc) {
+  MenuController(this._gc, {this.shareware = false}) {
+    _font = HudFont.stcfn(_gc);
     _buildMenus();
   }
 
   final GraphicsCache _gc;
+  late final HudFont _font;
+
+  /// Shareware gating. When true (vanilla M_Episode shareware branch) choosing
+  /// an episode other than 1 pops the SWSTRING message instead of starting.
+  /// Defaults to false here: ALL listed episodes are selectable and fire
+  /// onNewGame(episode, skill); the integration layer's G_InitNew decides what
+  /// to actually load (and falls back to E1M1 if the chosen episode's map is
+  /// absent from the loaded WAD).
+  final bool shareware;
 
   /// Whether the menu is currently shown (menuactive).
   bool active = false;
+
+  /// Active message-box text (M_StartMessage), or null. While set, the menu
+  /// shows the message and any key dismisses it (messageToPrint / messageNeedsInput).
+  String? _message;
+
+  /// The currently-shown message text, or null (exposed for tests).
+  String? get message => _message;
 
   /// The currently displayed menu.
   late MenuDef current;
@@ -179,11 +204,13 @@ class MenuController {
   void open() {
     active = true;
     current = _mainMenu;
+    _message = null;
   }
 
   /// Close the menu (M_ClearMenus).
   void close() {
     active = false;
+    _message = null;
   }
 
   void _enter(MenuDef m) {
@@ -192,6 +219,12 @@ class MenuController {
   }
 
   void _chooseEpisode(int ep) {
+    // M_Episode (shareware branch): only episode 1 (index 0) is playable; any
+    // other choice pops the SWSTRING message and stays on the episode menu.
+    if (shareware && ep != 0) {
+      _message = _swString;
+      return;
+    }
     chosenEpisode = ep;
     _enter(_skillMenu);
   }
@@ -220,6 +253,12 @@ class MenuController {
   bool responder(DoomEvent ev) {
     if (ev.type != EventType.keyDown) return false;
     if (!active) return false;
+    // M_Responder messageToPrint branch: while a message box is up, any key
+    // dismisses it and the event is consumed (no menu navigation).
+    if (_message != null) {
+      _message = null;
+      return true;
+    }
     final int key = ev.data1;
     final MenuDef m = current;
     switch (key) {
@@ -263,6 +302,11 @@ class MenuController {
   /// Draw the active menu (M_Drawer). No-op if not [active].
   void draw(Framebuffer fb) {
     if (!active) return;
+    // M_Drawer messageToPrint branch: a message box replaces the menu items.
+    if (_message != null) {
+      _drawMessage(fb, _message!);
+      return;
+    }
     final MenuDef m = current;
     // Banner.
     if (m.bannerPatch != null) {
@@ -286,5 +330,19 @@ class MenuController {
     final String skull = _skullFrame == 0 ? 'M_SKULL1' : 'M_SKULL2';
     final int cy = m.y - 5 + m.selected * m.lineHeight;
     _gc.draw(fb, skull, m.x - 32, cy);
+  }
+
+  /// M_Drawer message box: centre each '\n'-separated line vertically, using the
+  /// STCFN HUD font (vanilla draws the message via the small font).
+  void _drawMessage(Framebuffer fb, String text) {
+    final List<String> lines = text.split('\n');
+    final int lineH = _font.height;
+    int y = (kScreenHeight - lines.length * lineH) ~/ 2;
+    for (final String line in lines) {
+      final int w = _font.widthOf(line);
+      final int x = (kScreenWidth - w) ~/ 2;
+      _font.draw(fb, x, y, line);
+      y += lineH;
+    }
   }
 }

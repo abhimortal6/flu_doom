@@ -1,6 +1,9 @@
 // The integrated Doom game widget ("base game up" milestone).
 //
-// Wires every subsystem into a playable E1M1:
+// Boots to the TITLE SCREEN (D_StartTitle: GS_DEMOSCREEN / TITLEPIC), then the
+// main menu -> New Game -> episode -> skill -> G_InitNew starts E1M1 fresh.
+//
+// Wires every subsystem into a playable game:
 //   doom1.wad -> World.fromWad(E1M1) -> PlaySim.spawnLevel()
 //             -> Renderer + sprite adapter
 //             -> GameState (status bar / HUD / automap / menu)
@@ -156,8 +159,10 @@ class _DoomGameState extends State<DoomGame>
         debugPrint('[flu_doom] audio init failed; SFX disabled (NullSoundHook)');
       }
 
-      // World + play simulation (boots into E1M1). Inject the real SoundHook
-      // when audio is available; otherwise PlaySim defaults to NullSoundHook.
+      // World + play simulation. A level is loaded so the renderer/adapters and
+      // automap have valid geometry/viewpoint while on the title screen; the 3D
+      // worldView is only invoked once a New Game enters GS_LEVEL. Inject the
+      // real SoundHook when audio is available; else PlaySim uses NullSoundHook.
       final PlaySim sim = PlaySim(World.fromWad(wad), sound: sfxHook);
       simRef = sim;
       sim.spawnLevel();
@@ -186,6 +191,22 @@ class _DoomGameState extends State<DoomGame>
         playerStatus: PlayerStatusAdapter(sim.player),
         worldView: (Framebuffer fb) =>
             renderer.renderPlayerView(sprites, psprites),
+        // New Game from the menu (M_NewGame -> M_ChooseSkill -> G_DeferedInitNew
+        // -> G_InitNew). The menu fires (episode, skill) 0-based; G_InitNew uses
+        // a 1-based episode + map 1, then loads E<ep>M1 fresh (falling back to
+        // E1M1 if that episode is absent from the WAD).
+        onStartNewGame: (int episode, int skill) {
+          sim.newGame(episode + 1, skill, 1); // fresh init: E<ep>M1
+          // Sync the level-completion flow to whatever map newGame actually
+          // loaded (it may have fallen back to E1M1), so the next intermission /
+          // world-done advances from the right place. Map name is "E<ep>M<map>".
+          final String loaded = sim.world.level.name; // e.g. "E1M1"
+          final RegExpMatch? m =
+              RegExp(r'^E(\d+)M(\d+)$').firstMatch(loaded);
+          flow.episode = m != null ? int.parse(m.group(1)!) : 1;
+          flow.map = m != null ? int.parse(m.group(2)!) : 1;
+          flow.secretExit = false;
+        },
         // Intermission stats are built from the REAL finished level + player.
         statsProvider: () => flow.buildStats(),
         // Intermission done -> load the next map (or finale after E1M8).
@@ -207,9 +228,16 @@ class _DoomGameState extends State<DoomGame>
         flow.secretExitLevel();
         gs.completeLevel();
       };
-      // Jump straight into the level (this milestone boots into E1M1 rather
-      // than the title/demo screen).
-      gs.enterLevel();
+      // D_StartTitle: boot to the TITLE SCREEN (GS_DEMOSCREEN / TITLEPIC), NOT
+      // straight into a level. The GameState machine already defaults to
+      // GameStateType.demoScreen; pressing any key / Esc opens the main menu
+      // (M_Responder), and New Game -> episode -> skill fires onStartNewGame
+      // (G_InitNew) which loads E1M1 fresh and enters GS_LEVEL.
+      //
+      // The attract DEMO LOOP (demo1/credits/demo2 via D_AdvanceDemo) and the
+      // screen wipe are OUT OF SCOPE: the title is a static TITLEPIC that waits
+      // for input. (No title music — SFX-only build.)
+      gs.enterDemoScreen();
 
       _palettes = palettes;
       _sim = sim;

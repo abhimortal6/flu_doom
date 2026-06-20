@@ -225,9 +225,13 @@ into a `TicCmd` (this layer does not build tic commands).
   a `Palette` (Phase-1 exposes palette 0 only).
 - **Face cues**: damage-direction turn faces and the pickup evil-grin are
   simplified to forward/ouch/rampage selection.
-- Episodes 2/3 are listed in the episode menu but shareware has only E1Mx; the
-  integration layer should gate non-shareware episodes (the menu still fires the
-  chosen index, so a full IWAD works unchanged).
+- All three episodes are listed AND selectable in the episode menu
+  (`MenuController(shareware: false)`, the default): each fires
+  `onNewGame(episode, skill)`. `G_InitNew` (`PlaySim.newGame`) decides what to
+  load and falls back to E1M1 if the chosen episode's map lump is absent from
+  the loaded WAD (doom1.wad ships episode 1 only), so a new game always starts.
+  Passing `MenuController(shareware: true)` restores the vanilla `M_Episode`
+  shareware branch instead: episodes > 1 pop the `SWSTRING` message box.
 
 ---
 
