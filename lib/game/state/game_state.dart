@@ -57,6 +57,7 @@ class GameStateConfig {
     this.onStartNewGame,
     this.onAdvanceLevel,
     this.statsProvider,
+    this.onMusicCue,
   });
 
   /// The merged WAD (for graphics lumps).
@@ -83,6 +84,12 @@ class GameStateConfig {
   /// Supplies the end-of-level stats when a level completes. If null, a
   /// placeholder all-zero stats screen is shown.
   final IntermissionStats Function()? statsProvider;
+
+  /// Called whenever the top-level music cue should change, with the
+  /// destination [GameStateType]. The integration layer maps this to the right
+  /// song (title -> D_INTRO, level -> the level song, intermission -> D_INTER).
+  /// Best-effort; may be null (no music).
+  final void Function(GameStateType state)? onMusicCue;
 }
 
 /// The Doom game-state machine.
@@ -140,11 +147,13 @@ class GameState {
     gamestate = GameStateType.level;
     intermission.phase = IntermissionPhase.done;
     paused = false;
+    config.onMusicCue?.call(GameStateType.level);
   }
 
   /// Begin the title/demo screen (the default boot state). Shows TITLEPIC.
   void enterDemoScreen() {
     gamestate = GameStateType.demoScreen;
+    config.onMusicCue?.call(GameStateType.demoScreen);
   }
 
   /// Trigger the end-of-level intermission (G_CompleteLevel).
@@ -177,10 +186,12 @@ class GameState {
         break;
       case GameAction.worldDone:
         gamestate = GameStateType.level;
+        config.onMusicCue?.call(GameStateType.level);
         config.onAdvanceLevel?.call();
         break;
       case GameAction.victory:
         gamestate = GameStateType.finale;
+        config.onMusicCue?.call(GameStateType.finale);
         break;
       case GameAction.nothing:
         break;
@@ -209,6 +220,7 @@ class GameState {
 
   void _doCompleted() {
     gamestate = GameStateType.intermission;
+    config.onMusicCue?.call(GameStateType.intermission);
     final IntermissionStats stats = config.statsProvider?.call() ??
         IntermissionStats(
           episode: 0,

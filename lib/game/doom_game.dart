@@ -25,6 +25,7 @@ import 'package:flutter/services.dart' show rootBundle;
 import '../engine/input/event.dart';
 import '../engine/render/renderer.dart';
 import '../engine/sound/audio_engine.dart';
+import '../engine/sound/music.dart';
 import '../engine/sound/sfx_sound_hook.dart';
 import '../engine/system/gameloop.dart';
 import '../engine/video/framebuffer.dart';
@@ -72,6 +73,7 @@ class _DoomGameState extends State<DoomGame>
   ControlsSettingsStore? _store;
   SfxSoundHook? _sfxHook;
   AudioEngine? _audio;
+  MusicEngine? _music;
 
   // Common gameplay sounds to precache at boot (I_PrecacheSounds equivalent).
   static const List<int> _precacheSfx = <int>[
@@ -154,7 +156,12 @@ class _DoomGameState extends State<DoomGame>
         for (final int id in _precacheSfx) {
           unawaited(_sfxHook!.precache(id));
         }
-        debugPrint('[flu_doom] audio engine initialized; SFX enabled');
+        // MUSIC: the OPL MIDI player (i_oplmusic.c) wired to GENMIDI + OPL3.
+        // Renders MUS songs to looping audio per game state. Silent no-op if
+        // GENMIDI is missing or rendering fails — never crashes the game.
+        _music = MusicEngine(wad: wad, audio: audio);
+        debugPrint('[flu_doom] audio engine initialized; SFX enabled; '
+            'music ${_music!.enabled ? "enabled" : "disabled"}');
       } else {
         debugPrint('[flu_doom] audio init failed; SFX disabled (NullSoundHook)');
       }
@@ -214,6 +221,29 @@ class _DoomGameState extends State<DoomGame>
           final String? loaded = flow.worldDone();
           if (loaded == null) {
             gs.triggerVictory(); // end of episode 1 -> finale
+          }
+        },
+        // Song-per-state cue (S_Start). Title/demoscreen -> D_INTRO; GS_LEVEL ->
+        // the level's song (mus_e1m1 + (ep-1)*9 + map-1); intermission ->
+        // D_INTER; finale -> the victory music. Best-effort; the MusicEngine is
+        // itself failure-tolerant, so a null engine / failed render is silent.
+        onMusicCue: (GameStateType state) {
+          final MusicEngine? music = _music;
+          if (music == null) return;
+          switch (state) {
+            case GameStateType.demoScreen:
+              unawaited(music.changeMusic(Mus.intro));
+              break;
+            case GameStateType.level:
+              unawaited(music.changeMusic(
+                  musicForLevel(flow.episode, flow.map)));
+              break;
+            case GameStateType.intermission:
+              unawaited(music.changeMusic(Mus.inter));
+              break;
+            case GameStateType.finale:
+              unawaited(music.changeMusic(Mus.victor));
+              break;
           }
         },
       ));
@@ -332,6 +362,8 @@ class _DoomGameState extends State<DoomGame>
     _frame?.dispose();
     // Tear down the audio backend (no-op if it never initialized).
     _sfxHook = null;
+    unawaited(_music?.dispose() ?? Future<void>.value());
+    _music = null;
     unawaited(_audio?.dispose() ?? Future<void>.value());
     super.dispose();
   }

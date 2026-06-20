@@ -230,6 +230,17 @@ class _FakeAudio implements AudioEngine {
   }
 
   @override
+  Future<MusicHandle?> playMusic(String name, Uint8List wavBytes,
+          {required double volume}) async =>
+      null;
+
+  @override
+  Future<void> stopMusic(MusicHandle handle) async {}
+
+  @override
+  void setMusicVolume(MusicHandle handle, double volume) {}
+
+  @override
   Future<void> dispose() async {}
 }
 
