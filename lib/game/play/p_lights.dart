@@ -156,7 +156,12 @@ class LightManager {
 
   /// P_SpawnSpecials (light portion): attach the appropriate light thinker for
   /// each sector special. Vanilla special numbers preserved.
-  void spawnSpecials() {
+  ///
+  /// Returns the number of SECRET SECTORS (special 9) found, which vanilla
+  /// accumulates into `totalsecret` for the intermission "Secrets" stat. The
+  /// caller (PlaySim) forwards this to the spawner's totals.
+  int spawnSpecials() {
+    int secretSectors = 0;
     for (final Sector sector in level.sectors) {
       switch (sector.special) {
         case 1: // FLICKERING LIGHTS
@@ -201,10 +206,16 @@ class LightManager {
           thinkers.add(ff);
           sector.special = 0;
           break;
+        case 9: // SECRET SECTOR
+          // Vanilla P_SpawnSpecials: totalsecret++. The sector keeps special 9
+          // so P_PlayerInSpecialSector can credit it when the player enters.
+          secretSectors++;
+          break;
         default:
           break;
       }
     }
+    return secretSectors;
   }
 
   void _spawnStrobe(Sector sector, int darkTime, bool sync) {

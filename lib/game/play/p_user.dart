@@ -12,8 +12,10 @@ import '../world/ticcmd.dart';
 import 'info_tables.dart';
 import 'mobj.dart';
 import 'mobj_flags.dart';
+import 'p_inter.dart';
 import 'p_mobj.dart';
 import 'p_pspr.dart' show Pspr, GameMode;
+import 'p_spec.dart';
 import 'player.dart';
 import 'state_num.dart';
 
@@ -57,6 +59,21 @@ class PlayerSim {
   /// (SSG only in commercial; plasma/BFG blocked in shareware). Set by the
   /// integration; defaults to shareware (the bundled doom1.wad).
   GameMode gameMode = GameMode.shareware;
+
+  /// P_DamageMobj driver, used by P_PlayerInSpecialSector for damaging floors
+  /// (nukage/slime/lava). Set by the integration; if null, special-sector
+  /// damage is skipped.
+  Interactions? interactions;
+
+  /// Global `leveltime` for the tic currently being thought. The
+  /// `(leveltime & 0x1f)` gate in P_PlayerInSpecialSector is the ~0.9s damage
+  /// cadence; the integration refreshes this each tic to the playsim clock
+  /// (the value BEFORE the end-of-tic increment, matching vanilla P_Ticker).
+  int specialLeveltime = 0;
+
+  /// G_ExitLevel hook for sector special 11 (E1M8 super-damage finale). Set by
+  /// the integration to the same exit path as the exit switch.
+  void Function()? onExitLevel;
 
   /// P_Thrust: add to the player's momentum in the given [angle] by [move].
   void thrust(Player player, angle_t angle, int move) {
@@ -210,8 +227,18 @@ class PlayerSim {
 
     calcHeight(player);
 
-    // P_PlayerInSpecialSector (damaging floors etc.) is owned by the
-    // world/specials layer and not yet wired; omitted here.
+    // P_PlayerInSpecialSector: damaging floors (nukage/slime/lava), secret
+    // sectors, and the E1M8 exit-damage special. Only run when the player's
+    // current sector has a non-zero special (vanilla guard in P_PlayerThink).
+    final Interactions? inter = interactions;
+    if (inter != null && mo.subsectorSector?.special != 0) {
+      playerInSpecialSector(
+        player,
+        leveltime: specialLeveltime,
+        interactions: inter,
+        exitLevel: onExitLevel,
+      );
+    }
 
     // Check for weapon change. A special event has no other buttons.
     if ((player.cmd.buttons & btSpecial) != 0) {

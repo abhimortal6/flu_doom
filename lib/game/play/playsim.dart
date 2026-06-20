@@ -174,6 +174,11 @@ class PlaySim {
     // Wake monsters when the player fires (vanilla P_FireWeapon noise alert).
     playerSim.onPlayerFire = (Player p) => enemyAi.noiseAlert(p.mo!, p.mo!);
 
+    // P_PlayerInSpecialSector: damaging-floor / secret-sector check needs the
+    // P_DamageMobj driver. leveltime + the exit hook are refreshed per-tic in
+    // [tic] (onExitLevel may be re-installed by the integration after build).
+    playerSim.interactions = interactions;
+
     // MONSTER door-opening: P_UseSpecialLine for monsters -> the door manager.
     enemyAi.useSpecialLine = (Mobj actor, Line line, int side) =>
         doors.useSpecialLine(actor, line, side);
@@ -228,8 +233,10 @@ class PlaySim {
     }
     spawner.spawnPlayer(start, player, pspr);
 
-    // 3) Attach sector light specials so the world is alive.
-    lights.spawnSpecials();
+    // 3) Attach sector light specials so the world is alive. P_SpawnSpecials
+    //    also counts SECRET SECTORS (special 9) into totalsecret for the
+    //    intermission "Secrets" stat (vanilla `totalsecret++`).
+    spawner.totalSecret += lights.spawnSpecials();
 
     // 4) Prime the viewpoint from the player so the renderer has a camera.
     playerSim.calcHeight(player);
@@ -349,6 +356,13 @@ class PlaySim {
     // recreated, so we refresh the clocks here each tic.
     pspr.levelTime = levelTime;
     enemyAi.gametic = levelTime;
+
+    // P_PlayerInSpecialSector reads the global `leveltime` for its `&0x1f`
+    // damage gate; in vanilla P_Ticker this is the value BEFORE the end-of-tic
+    // increment (levelTime is incremented at the end of [tic]). Route the exit
+    // special (11) through the same onExitLevel hook the exit switch uses.
+    playerSim.specialLeveltime = levelTime;
+    playerSim.onExitLevel = () => onExitLevel?.call();
 
     // Player think first (vanilla P_PlayerThink is called from P_MobjThinker's
     // path via the player mobj, but ordering relative to other thinkers does
