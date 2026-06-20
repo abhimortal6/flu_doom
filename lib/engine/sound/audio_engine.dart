@@ -43,6 +43,9 @@ abstract interface class AudioEngine {
   /// Stop and release a looping music stream started by [playMusic].
   Future<void> stopMusic(MusicHandle handle);
 
+  /// Pause (true) or resume (false) a playing music stream.
+  void pauseMusic(MusicHandle handle, bool paused);
+
   /// Adjust the volume (0..1) of a playing music stream.
   void setMusicVolume(MusicHandle handle, double volume);
 
@@ -129,6 +132,17 @@ class SoLoudAudioEngine implements AudioEngine {
       await _soloud.disposeSource(m.source);
     } catch (_) {
       // Ignore teardown errors.
+    }
+  }
+
+  @override
+  void pauseMusic(MusicHandle handle, bool paused) {
+    if (!_initialized) return;
+    final _SoLoudMusic m = handle as _SoLoudMusic;
+    try {
+      _soloud.setPause(m.handle, paused);
+    } catch (_) {
+      // Ignore.
     }
   }
 

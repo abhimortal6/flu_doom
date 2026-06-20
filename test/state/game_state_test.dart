@@ -15,6 +15,7 @@ GameState _build({
   void Function(int, int)? onNewGame,
   void Function()? onAdvance,
   IntermissionStats Function()? stats,
+  void Function(bool)? onMusicPause,
   required List<bool> worldViewCalled,
 }) {
   final WadFile wad = WadFile.fromBytes(
@@ -31,6 +32,7 @@ GameState _build({
     onStartNewGame: onNewGame,
     onAdvanceLevel: onAdvance,
     statsProvider: stats,
+    onMusicPause: onMusicPause,
   );
   return GameState(config);
 }
@@ -43,6 +45,29 @@ void main() {
 
     gs.ticker(<DoomEvent>[const DoomEvent.keyDown(DoomKey.escape)]);
     expect(gs.menu.active, isTrue);
+  });
+
+  test('opening the menu pauses music; closing it resumes', () {
+    final called = <bool>[false];
+    final pauseEvents = <bool>[];
+    final GameState gs = _build(
+      worldViewCalled: called,
+      onMusicPause: pauseEvents.add,
+    );
+    gs.enterLevel();
+    // Tick once at rest -> no pause change.
+    gs.ticker(<DoomEvent>[]);
+    expect(pauseEvents, isEmpty);
+
+    // ESC opens the menu -> music pauses (true).
+    gs.ticker(<DoomEvent>[const DoomEvent.keyDown(DoomKey.escape)]);
+    expect(gs.menu.active, isTrue);
+    expect(pauseEvents, <bool>[true]);
+
+    // ESC again closes the menu -> music resumes (false).
+    gs.ticker(<DoomEvent>[const DoomEvent.keyDown(DoomKey.escape)]);
+    expect(gs.menu.active, isFalse);
+    expect(pauseEvents, <bool>[true, false]);
   });
 
   test('GS_LEVEL render calls WorldView then overlays status bar', () {

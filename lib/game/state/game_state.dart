@@ -58,6 +58,7 @@ class GameStateConfig {
     this.onAdvanceLevel,
     this.statsProvider,
     this.onMusicCue,
+    this.onMusicPause,
   });
 
   /// The merged WAD (for graphics lumps).
@@ -90,6 +91,11 @@ class GameStateConfig {
   /// song (title -> D_INTRO, level -> the level song, intermission -> D_INTER).
   /// Best-effort; may be null (no music).
   final void Function(GameStateType state)? onMusicCue;
+
+  /// Called when music should pause (true) or resume (false). Fired when the
+  /// menu opens or gameplay is paused (and resumed on close/unpause), mirroring
+  /// vanilla S_PauseSound / S_ResumeSound. Best-effort; may be null (no music).
+  final void Function(bool paused)? onMusicPause;
 }
 
 /// The Doom game-state machine.
@@ -129,7 +135,24 @@ class GameState {
   /// Monotonic game tic counter (gametic). Bumped each [ticker] call.
   int gametic = 0;
 
+  /// Last-fired music-pause state, so [onMusicPause] only fires on a change.
+  bool _musicPaused = false;
+
   void _deferAction(GameAction a) => _action = a;
+
+  /// True when music should be paused: the menu is open, or gameplay is paused.
+  /// (Vanilla pauses sound/music while the menu is up and on the Pause key.)
+  bool get _shouldPauseMusic =>
+      menu.active || (gamestate == GameStateType.level && paused);
+
+  /// Fire [onMusicPause] if the should-pause-music state has changed.
+  void _syncMusicPause() {
+    final bool want = _shouldPauseMusic;
+    if (want != _musicPaused) {
+      _musicPaused = want;
+      config.onMusicPause?.call(want);
+    }
+  }
 
   /// PLAYPAL palette index to tint the frame with this frame (ST_doPaletteStuff
   /// in st_stuff.c is driven by ST_Drawer during GS_LEVEL). Outside the level
@@ -214,6 +237,9 @@ class GameState {
       case GameStateType.demoScreen:
         break;
     }
+
+    // Pause/resume music when the menu opens/closes or gameplay is paused.
+    _syncMusicPause();
 
     gametic++;
   }

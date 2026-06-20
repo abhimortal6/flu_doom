@@ -343,6 +343,11 @@ class MusicEngine {
   /// Handle of the playing stream, if any.
   MusicHandle? _handle;
 
+  /// Whether playback is currently paused (I_OPL_PauseSong state). Tracked so a
+  /// stream started AFTER pause() (e.g. a slow render that completes while the
+  /// menu is open) comes up paused too.
+  bool _paused = false;
+
   /// Monotonic token to discard stale async renders if the song changes mid-load.
   int _playToken = 0;
 
@@ -402,6 +407,12 @@ class MusicEngine {
       }
       _handle = handle;
       if (handle != null) {
+        // If a pause was requested while this song was still rendering, bring
+        // it up paused so opening the menu before the first render finishes
+        // doesn't leak audio.
+        if (_paused) {
+          audio.pauseMusic(handle, true);
+        }
         playCount++;
         assert(() {
           // ignore: avoid_print
@@ -414,6 +425,30 @@ class MusicEngine {
       // Any failure -> silent; never crash.
     }
   }
+
+  /// I_OPL_PauseSong: pause the currently-playing music (idempotent). New songs
+  /// started while paused come up paused too. Safe when disabled / no stream.
+  void pause() {
+    if (!_enabled || _paused) return;
+    _paused = true;
+    final MusicHandle? h = _handle;
+    if (h != null) {
+      audio.pauseMusic(h, true);
+    }
+  }
+
+  /// I_OPL_ResumeSong: resume paused music (idempotent). Safe when disabled.
+  void resume() {
+    if (!_enabled || !_paused) return;
+    _paused = false;
+    final MusicHandle? h = _handle;
+    if (h != null) {
+      audio.pauseMusic(h, false);
+    }
+  }
+
+  /// Whether music playback is currently paused.
+  bool get isPaused => _paused;
 
   /// Render (or fetch from cache) the WAV for lump [lumpName]. Runs the synth in
   /// an isolate when [useIsolate] is set, else synchronously.

@@ -24,6 +24,9 @@ class _FakeAudioEngine implements AudioEngine {
   int playMusicCount = 0;
   int stopMusicCount = 0;
 
+  /// Record of pauseMusic(paused) calls in order (true == pause).
+  final List<bool> pauseCalls = <bool>[];
+
   @override
   Future<bool> init() async => initialized;
 
@@ -44,6 +47,11 @@ class _FakeAudioEngine implements AudioEngine {
   @override
   Future<void> stopMusic(MusicHandle handle) async {
     stopMusicCount++;
+  }
+
+  @override
+  void pauseMusic(MusicHandle handle, bool paused) {
+    pauseCalls.add(paused);
   }
 
   @override
@@ -218,6 +226,63 @@ void main() {
       expect(audio.stopMusicCount, greaterThanOrEqualTo(1));
       expect(music.currentMusic, Mus.e1m1);
 
+      await music.dispose();
+    });
+
+    test('pause/resume forwards to the backend and is idempotent', () async {
+      final _FakeAudioEngine audio = _FakeAudioEngine(initialized: true);
+      final MusicEngine music =
+          MusicEngine(wad: wad, audio: audio, useIsolate: false);
+
+      await music.changeMusic(Mus.intro);
+      expect(music.isPaused, isFalse);
+
+      // Pause -> one pause(true) call.
+      music.pause();
+      expect(music.isPaused, isTrue);
+      expect(audio.pauseCalls, <bool>[true]);
+
+      // Re-pausing is a no-op (idempotent).
+      music.pause();
+      expect(audio.pauseCalls, <bool>[true]);
+
+      // Resume -> one pause(false) call.
+      music.resume();
+      expect(music.isPaused, isFalse);
+      expect(audio.pauseCalls, <bool>[true, false]);
+
+      // Re-resuming is a no-op.
+      music.resume();
+      expect(audio.pauseCalls, <bool>[true, false]);
+
+      await music.dispose();
+    });
+
+    test('a song started while paused comes up paused', () async {
+      final _FakeAudioEngine audio = _FakeAudioEngine(initialized: true);
+      final MusicEngine music =
+          MusicEngine(wad: wad, audio: audio, useIsolate: false);
+
+      // Pause BEFORE any song is playing (e.g. menu open at boot).
+      music.pause();
+      expect(audio.pauseCalls, isEmpty,
+          reason: 'no stream yet, nothing to pause');
+
+      // Now a song starts -> it must come up paused.
+      await music.changeMusic(Mus.intro);
+      expect(audio.pauseCalls, <bool>[true],
+          reason: 'newly started stream paused because engine is paused');
+
+      await music.dispose();
+    });
+
+    test('disabled engine pause/resume are silent no-ops', () async {
+      final _FakeAudioEngine audio = _FakeAudioEngine(initialized: false);
+      final MusicEngine music = MusicEngine(wad: wad, audio: audio);
+      music.pause();
+      music.resume();
+      expect(music.isPaused, isFalse);
+      expect(audio.pauseCalls, isEmpty);
       await music.dispose();
     });
 

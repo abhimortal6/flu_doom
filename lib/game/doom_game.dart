@@ -246,6 +246,15 @@ class _DoomGameState extends State<DoomGame>
               break;
           }
         },
+        // Pause/resume music when the menu opens or gameplay is paused
+        // (S_PauseSound / S_ResumeSound). Best-effort; null engine is a no-op.
+        onMusicPause: (bool paused) {
+          if (paused) {
+            _music?.pause();
+          } else {
+            _music?.resume();
+          }
+        },
       ));
 
       // Level-exit hooks (switch special 11 -> normal, 51 -> secret, boss
