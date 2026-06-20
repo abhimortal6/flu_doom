@@ -67,7 +67,11 @@ flutter:
   uses-material-design: true
 
   assets:
-    - assets/doom1.wad
+    # Bundled game IWAD: Freedoom Phase 1 (BSD-licensed, freely redistributable).
+    # The shareware doom1.wad is intentionally NOT bundled — it remains in the
+    # repo only as a test fixture (tests read it via File('assets/doom1.wad'),
+    # not rootBundle, so it does not need to be a Flutter asset).
+    - assets/freedoom1.wad
 
   # To add assets to your application, add an assets section, like this:
   # _example_assets:

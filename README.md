@@ -4,7 +4,8 @@
 Doom — the software renderer, play simulation, sound (DMX SFX) and FM music
 (Nuked-OPL3) — ported faithfully from [Chocolate Doom](https://github.com/chocolate-doom/chocolate-doom)
 (GPLv2) and Nuked-OPL3 to Flutter. It boots to the title screen, opens the main
-menu, starts a New Game and plays through the shareware episode (E1M1 onward):
+menu, starts a New Game and plays through the bundled IWAD's first episode
+(E1M1 onward):
 full software-rendered 3D, player movement and collision, enemy AI, weapons,
 hitscan/missiles, pickups, doors/switches, intermissions, sound and music — all
 in Dart, with no native game code.
@@ -129,8 +130,18 @@ lib/
 
 - **Code** is a port of **Chocolate Doom** (GPLv2) and **Nuked-OPL3**.
   Accordingly, **this project is licensed under the GNU GPL v2**.
-- **Game data** is the freely-redistributable **shareware `doom1.wad`**
-  (© id Software), bundled in `assets/`.
+- **Game data** is **Freedoom Phase 1** (`assets/freedoom1.wad`,
+  [freedoom.github.io](https://freedoom.github.io/)) — a **BSD-licensed**,
+  vanilla-compatible drop-in IWAD (ExMy maps, standard texture/sprite/sound/music
+  lump names). It is the only IWAD bundled with the app, so **the app is freely
+  redistributable**. (Freedoom Phase 1 actually has 4 episodes; the in-game menu
+  currently exposes 3 — episode 4 is not yet selectable. Note its E1M1 is a
+  different, larger map than shareware Doom's.)
+- The shareware **`doom1.wad`** (© id Software) is **retained in `assets/` only
+  as a test fixture**: the test suite asserts shareware-Doom-specific map data
+  (E1M1 geometry, the `STARTAN3`/`FLOOR4_8`/`PLAYA1` lumps, player start, etc.),
+  so it loads `doom1.wad` directly from the filesystem via `File(...)`. It is
+  **not** declared as a Flutter asset and is **not** bundled in the app.
 - **Dependencies**: `flutter_soloud` (low-latency audio backend) and
   `shared_preferences` (settings persistence) are used under their own licenses.
 - The C reference sources used for the port live in `reference/`,

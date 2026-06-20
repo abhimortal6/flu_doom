@@ -4,7 +4,7 @@
 // main menu -> New Game -> episode -> skill -> G_InitNew starts E1M1 fresh.
 //
 // Wires every subsystem into a playable game:
-//   doom1.wad -> World.fromWad(E1M1) -> PlaySim.spawnLevel()
+//   freedoom1.wad -> World.fromWad(E1M1) -> PlaySim.spawnLevel()
 //             -> Renderer + sprite adapter
 //             -> GameState (status bar / HUD / automap / menu)
 //             -> GameLoop (35Hz tic + render)
@@ -50,7 +50,12 @@ import 'state/game_state.dart';
 import 'state/level_flow.dart';
 import 'world/world.dart';
 
-const String kWadAsset = 'assets/doom1.wad';
+// Bundled game IWAD: Freedoom Phase 1 (freedoom1.wad). Freedoom is a
+// BSD-licensed, vanilla-compatible IWAD (ExMy maps, standard texture/sprite/
+// sound/music lump names) that the engine loads exactly like the shareware
+// doom1.wad. The shareware doom1.wad is retained in the repo as a test fixture
+// (the test suite asserts Doom-specific map data) but is NOT bundled here.
+const String kWadAsset = 'assets/freedoom1.wad';
 
 class DoomGame extends StatefulWidget {
   const DoomGame({super.key});
