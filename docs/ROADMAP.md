@@ -1,7 +1,8 @@
 # flu_doom — Roadmap
 
-flu_doom is a pure-Dart (no FFI) port of vanilla Doom. The base
-game is up and playable. This file tracks the remaining work as a public
+flu_doom is a Doom source port written in Dart (the engine is pure Dart with no
+FFI; flutter_soloud is the only native dependency, used for audio playback). The
+base game is up and playable. This file tracks the remaining work as a public
 feature roadmap. See [`README.md`](../README.md) for the full feature-status
 table and the frozen `CONTRACTS_*.md` interface documents.
 

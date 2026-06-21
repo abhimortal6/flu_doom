@@ -1,20 +1,23 @@
 # flu_doom
 
-**flu_doom** is a from-scratch, **pure-Dart (NO FFI)** port of the
-vanilla Doom engine, running as a **Flutter app**. The software renderer, play
-simulation (BSP, mobjs/thinkers, physics, collision, combat), WAD loading,
+**flu_doom** is a **Doom source port written from scratch in Dart, running on
+Flutter**. The complete engine — software renderer (BSP, walls, flats, sprites),
+play simulation (mobjs/thinkers, physics, collision, combat), WAD loading,
 16.16 fixed-point and BAM-angle math, the DMX sound dispatch, and the full FM
-music path (WAD MUS → MIDI → GENMIDI → Nuked-OPL3 → PCM) are all faithfully
-ported **into Dart** from [Chocolate Doom](https://github.com/chocolate-doom/chocolate-doom)
-(GPLv2) and [Nuked-OPL3](https://github.com/nukeykt/Nuked-OPL3) (LGPL). There is
-no native Doom binary and no FFI binding — the engine *is* the Dart code.
+music path (WAD MUS → MIDI → GENMIDI → Nuked-OPL3 → PCM) — is reimplemented in
+plain Dart from [Chocolate Doom](https://github.com/chocolate-doom/chocolate-doom)
+(GPLv2) and [Nuked-OPL3](https://github.com/nukeykt/Nuked-OPL3) (LGPL), with no
+FFI and no native engine code. There is no native Doom binary — the engine *is*
+the Dart code.
 
-Flutter provides the shell around that pure-Dart engine: the engine's 320×200
-indexed framebuffer is converted to a `dart:ui` image each frame, the game loop
-runs off a `Ticker`/vsync, and input, menus and on-screen controls are Flutter
-widgets. The only native dependency is **`flutter_soloud`**, used purely as the
-low-latency audio backend that plays PCM/WAV buffers flu_doom synthesizes itself
-in Dart (it does not generate any game audio).
+Flutter is the SDK and runtime around that engine: it provides the app shell,
+windowing, input, and the render surface. The engine's 320×200 indexed
+framebuffer is converted to a `dart:ui` image each frame, the game loop runs off
+a `Ticker`/vsync, and menus and on-screen controls are Flutter widgets. There is
+exactly one native dependency — **`flutter_soloud`** — and it does nothing but
+stream the PCM audio that the Dart synthesizer already generated out to the
+speakers. The music and sound are synthesized in Dart; soloud just plays them
+back.
 
 > The engine relies on 32-bit signed integer overflow for fixed-point math. It
 > targets **Dart native (AOT) integer semantics** (macOS / iOS / Android). The
@@ -168,7 +171,7 @@ lib/
   game/doom_game.dart             Integration: wires every subsystem into the loop.
   game/wad_store.dart             Imported-IWAD location/copy/load (bring-your-own-WAD).
 
-  engine/                         Pure-Dart engine (no game-specific knowledge)
+  engine/                         The engine — pure Dart, no FFI (no game-specific knowledge)
     math/   fixed, angle, tables  16.16 fixed-point + BAM angles + trig LUTs.
     wad/    wad                    WAD/lump reader.
     video/  framebuffer, palette, patch, video_view   320x200 indexed FB -> ARGB.

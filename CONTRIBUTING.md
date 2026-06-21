@@ -1,8 +1,9 @@
 # Contributing to flu_doom
 
-Thanks for your interest. flu_doom is a **pure-Dart (no FFI) port of vanilla
-Doom** (Chocolate Doom + Nuked-OPL3) running as a Flutter app. A few
-ground rules keep the port faithful.
+Thanks for your interest. flu_doom is a **Doom source port written in Dart and
+running on Flutter** (Chocolate Doom + Nuked-OPL3). The engine itself is pure
+Dart with no FFI; flutter_soloud is the one native dependency, used only for
+audio playback. A few ground rules keep the port faithful.
 
 ## The one rule that matters: port faithfully, never paraphrase
 
