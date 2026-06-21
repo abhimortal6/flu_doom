@@ -27,7 +27,12 @@ in Dart (it does not generate any game audio).
 </p>
 
 <p align="center">
-  <a href="docs/media/gameplay-demo.mp4">▶ Watch the full gameplay clip (MP4)</a>
+  <video src="docs/media/gameplay-demo.mp4" controls muted loop playsinline width="720">
+    <a href="docs/media/gameplay-demo.mp4">▶ Watch the gameplay clip (MP4)</a>
+  </video>
+  <br>
+  <em>Gameplay clip (E1M1, Android release build). If the player doesn't load,
+  <a href="docs/media/gameplay-demo.mp4">download the MP4</a>.</em>
 </p>
 
 ---
