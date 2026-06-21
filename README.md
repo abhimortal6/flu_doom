@@ -20,6 +20,38 @@ in Dart (it does not generate any game audio).
 > targets **Dart native (AOT) integer semantics** (macOS / iOS / Android). The
 > **web target is out of scope** (JS doubles break the fixed-point arithmetic).
 
+<p align="center">
+  <img src="docs/media/gameplay-preview.gif" alt="flu_doom running on Android — E1M1 gameplay with on-screen touch controls" width="720">
+  <br>
+  <em>flu_doom running on Android: E1M1, full status bar HUD, and on-screen touch controls.</em>
+</p>
+
+<p align="center">
+  <a href="docs/media/gameplay-demo.mp4">▶ Watch the full gameplay clip (MP4)</a>
+</p>
+
+---
+
+## Screenshots
+
+All captured on an Android phone running the release build (Freedoom Phase 1
+IWAD). The on-screen joystick + fire/use buttons are the mobile touch controls;
+on desktop the game is keyboard + mouse and the overlay is hidden.
+
+| | |
+|---|---|
+| [![Title screen and main menu](docs/media/01-title-menu.jpg)](docs/media/01-title-menu.jpg) | [![E1M1 — nukage hall](docs/media/02-gameplay-e1m1-nukage.jpg)](docs/media/02-gameplay-e1m1-nukage.jpg) |
+| Title screen / main menu | E1M1 — full status-bar HUD |
+| [![Combat in the computer room](docs/media/07-combat-computer-room.jpg)](docs/media/07-combat-computer-room.jpg) | [![Close-quarters fight](docs/media/08-combat-closeup.jpg)](docs/media/08-combat-closeup.jpg) |
+| Combat — hitscan blood + the iconic monitor wall | Close-quarters, low health (note the bloodied HUD face) |
+| [![Corridor ambush](docs/media/03-combat-zombieman.jpg)](docs/media/03-combat-zombieman.jpg) | [![Customize touch layout](docs/media/05-touch-controls-customize.jpg)](docs/media/05-touch-controls-customize.jpg) |
+| Former-human ambush in a corridor | Drag-to-reposition touch-control layout editor |
+| [![Computer room](docs/media/06-gameplay-computer-room.jpg)](docs/media/06-gameplay-computer-room.jpg) | [![Portrait orientation](docs/media/09-portrait-gameplay.jpg)](docs/media/09-portrait-gameplay.jpg) |
+| The E1M1 monitor room | Portrait orientation (letterboxed view) |
+
+> The green `fps`/`tic`/`state` text in the top-left is the optional debug
+> overlay (toggled with the `dbg` button); it is off by default.
+
 ---
 
 ## Development
@@ -37,12 +69,22 @@ is wall-clock span, not continuous compute time.
 
 ## Bring your own WAD
 
-**flu_doom ships NO game data.** It contains no maps, textures, sounds, or music —
-only the engine. On first run the app opens an **in-app import screen** and asks
-you to supply a Doom-format **IWAD** from your device; the file is copied into
-the app's documents directory and loaded on every subsequent launch.
+**The committed source ships NO game data.** It contains no maps, textures,
+sounds, or music — only the engine. There are two ways the app finds a WAD at
+runtime, in this order:
 
-You can use any vanilla-compatible IWAD:
+1. **Bundled asset WAD (build-time).** If a WAD is present in `assets/` when you
+   build (e.g. `assets/doom1.wad` or `assets/freedoom1.wad`), it is bundled into
+   the app and loaded **directly on launch** — the app boots straight into the
+   title screen with no import step. (The screenshots above are from such a
+   build, bundling Freedoom Phase 1.) WADs in `assets/` are gitignored, so no
+   game data is ever committed.
+2. **In-app import (runtime).** If no WAD was bundled, the app opens an **import
+   screen** on first run and asks you to supply a Doom-format **IWAD** from your
+   device; the file is copied into the app's documents directory and loaded on
+   every subsequent launch.
+
+Either way you can use any vanilla-compatible IWAD:
 
 - **Freedoom** — a free, BSD-licensed, vanilla-compatible IWAD. Download
   `freedoom1.wad` (Phase 1) or `freedoom2.wad` (Phase 2) from
