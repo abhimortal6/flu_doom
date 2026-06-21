@@ -4,8 +4,18 @@
 // maintains a live key-state set (the down keycodes) that a future
 // G_BuildTiccmd can read directly — mirroring vanilla's gamekeydown[] array.
 
+import 'dart:async';
+
+import 'package:flutter/foundation.dart' show debugPrint;
+
 import '../engine/input/event.dart';
 import 'game_action.dart';
+
+/// When true, the action sink prints `[touch]`-tagged lines for taps and the
+/// key edges they post. Read on the phone via `adb logcat | grep '\[touch\]'`.
+/// Always on (these are infrequent, only on discrete button presses) but
+/// compiled out of release if `debugPrint` is a no-op.
+const bool kTouchInputDebugLog = true;
 
 /// Abstract sink for game actions. The overlay and keyboard layers depend on
 /// this interface, not on [EventQueue] directly, so they can be tested with a
@@ -41,6 +51,23 @@ class EventQueueActionSink implements ActionSink {
   /// still held by another.
   final Map<int, int> _refCounts = <int, int>{};
 
+  /// Pending min-hold timers, keyed by Doom keycode. A momentary [tapAction]
+  /// presses the key (ref-count++), then schedules its release after
+  /// [tapMinHold] so the 35 Hz per-tic key-state sampler is GUARANTEED to
+  /// observe the key as down for at least one tic. Without this, a touch tap's
+  /// down+up completes inside a single frame (<16 ms) — well under one tic
+  /// period (~28.6 ms) — and the per-tic sampler (KeyStateBridge) never sees it,
+  /// so USE / weapon-switch taps silently do nothing. (The menu still works
+  /// because it consumes discrete EventQueue events, not the sampled key-state.)
+  final Map<int, Timer> _tapTimers = <int, Timer>{};
+
+  /// How long a [tapAction] keeps its key down before auto-releasing. Two-to-
+  /// three tics (tic period ~28.6 ms at 35 Hz) so at least one — typically two —
+  /// tic samples observe the key. BT_USE / weapon select are edge-triggered in
+  /// the playsim (useDown / first-press-wins), so holding for a few tics still
+  /// produces exactly one action per tap.
+  static const Duration tapMinHold = Duration(milliseconds: 100);
+
   /// Read-only view of currently-pressed Doom keycodes (for G_BuildTiccmd).
   Set<int> get downKeys =>
       _refCounts.entries.where((e) => e.value > 0).map((e) => e.key).toSet();
@@ -75,16 +102,62 @@ class EventQueueActionSink implements ActionSink {
 
   @override
   void tapAction(GameAction action) {
-    // Momentary: emit a clean down/up pair without disturbing ref-counts for
-    // keys that may be held by something else. We post edges directly.
+    // Momentary tap with a MINIMUM HOLD. We press the key NOW (posting the
+    // keyDown edge immediately, so the menu — which reads discrete events —
+    // still responds on key-down), bump the ref-count so isKeyDown() reports it
+    // as held, then schedule the release after [tapMinHold]. That guarantees the
+    // per-tic key-state sampler sees the key down for at least one tic; without
+    // it the down/up would complete inside one frame and never be sampled.
+    if (kTouchInputDebugLog) {
+      debugPrint('[touch] tapAction ${action.name} '
+          'keys=${ActionKeys.keysFor(action).map((c) => '0x${c.toRadixString(16)}').join(',')}');
+    }
     for (final int code in ActionKeys.keysFor(action)) {
-      queue.postEvent(DoomEvent.keyDown(code));
+      final Timer? existing = _tapTimers[code];
+      if (existing != null) {
+        // Re-tap before the previous min-hold elapsed: refresh the hold window
+        // WITHOUT a second ref-count increment, so the ref-count stays balanced
+        // (exactly one pending release per key) and the key cannot get stuck.
+        existing.cancel();
+        if (kTouchInputDebugLog) {
+          debugPrint('[touch] tap refresh hold 0x${code.toRadixString(16)}');
+        }
+      } else {
+        final int prev = _refCounts[code] ?? 0;
+        _refCounts[code] = prev + 1;
+        if (prev == 0) {
+          queue.postEvent(DoomEvent.keyDown(code));
+          if (kTouchInputDebugLog) {
+            debugPrint('[touch] tap keyDown 0x${code.toRadixString(16)}');
+          }
+        }
+      }
+      _tapTimers[code] = Timer(tapMinHold, () => _endTap(code));
+    }
+  }
+
+  /// Releases a tap-held key after its min-hold elapses: drop the ref-count this
+  /// tap added and, if it was the last holder, post the keyUp edge.
+  void _endTap(int code) {
+    _tapTimers.remove(code);
+    final int prev = _refCounts[code] ?? 0;
+    if (prev <= 0) return;
+    final int next = prev - 1;
+    _refCounts[code] = next;
+    if (next == 0) {
       queue.postEvent(DoomEvent.keyUp(code));
+      if (kTouchInputDebugLog) {
+        debugPrint('[touch] tap keyUp 0x${code.toRadixString(16)}');
+      }
     }
   }
 
   /// Release everything (e.g. on focus loss / app pause) to avoid stuck keys.
   void releaseAll() {
+    for (final Timer t in _tapTimers.values) {
+      t.cancel();
+    }
+    _tapTimers.clear();
     for (final entry in _refCounts.entries) {
       if (entry.value > 0) {
         queue.postEvent(DoomEvent.keyUp(entry.key));

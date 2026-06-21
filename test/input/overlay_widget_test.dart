@@ -54,8 +54,16 @@ void main() {
 
     await tester.tap(find.bySemanticsLabel('USE'));
     await tester.pump();
+    // USE is now a momentary tap (edge-triggered in the playsim): keyDown lands
+    // immediately and the key is held down across at least one tic.
     final events = q.drain();
     expect(events.any((e) => e.data1 == DoomKey.spacebar), isTrue);
+    expect(events.single.type, EventType.keyDown);
+    // Drain the min-hold + flash timers so none pend at teardown.
+    await tester.pump(const Duration(milliseconds: 200));
+    final after = q.drain();
+    expect(after.single.type, EventType.keyUp);
+    expect(after.single.data1, DoomKey.spacebar);
   });
 
   testWidgets('NEXT weapon button emits a tap (down+up) of equals',
@@ -67,14 +75,18 @@ void main() {
     expect(next, findsOneWidget);
     await tester.tap(next);
     await tester.pump();
-    final events = q.drain();
-    expect(events, hasLength(2));
+    // Min-hold: the keyDown edge posts immediately; the key stays down so a
+    // per-tic sampler can observe it; the keyUp posts after tapMinHold.
+    var events = q.drain();
+    expect(events, hasLength(1));
     expect(events[0].type, EventType.keyDown);
     expect(events[0].data1, DoomKey.equals);
-    expect(events[1].type, EventType.keyUp);
-    expect(events[1].data1, DoomKey.equals);
-    // Let the momentary-flash timer fire so no timer is pending at teardown.
+    // Let the min-hold + flash timers fire; the keyUp lands.
     await tester.pump(const Duration(milliseconds: 200));
+    events = q.drain();
+    expect(events, hasLength(1));
+    expect(events[0].type, EventType.keyUp);
+    expect(events[0].data1, DoomKey.equals);
   });
 
   testWidgets('PREV weapon button emits a tap (down+up) of minus',
@@ -86,13 +98,15 @@ void main() {
     expect(prev, findsOneWidget);
     await tester.tap(prev);
     await tester.pump();
-    final events = q.drain();
-    expect(events, hasLength(2));
+    var events = q.drain();
+    expect(events, hasLength(1));
     expect(events[0].type, EventType.keyDown);
     expect(events[0].data1, DoomKey.minus);
-    expect(events[1].type, EventType.keyUp);
-    expect(events[1].data1, DoomKey.minus);
     await tester.pump(const Duration(milliseconds: 200));
+    events = q.drain();
+    expect(events, hasLength(1));
+    expect(events[0].type, EventType.keyUp);
+    expect(events[0].data1, DoomKey.minus);
   });
 
   testWidgets(
@@ -116,15 +130,19 @@ void main() {
       expect(find.bySemanticsLabel('PREV'), findsOneWidget);
       expect(find.bySemanticsLabel('NEXT'), findsOneWidget);
 
-      // Tap NEXT; it must register as the weapon action, not a look-drag.
+      // Tap NEXT; it must register as the weapon action, not a look-drag. With
+      // the min-hold the keyDown lands immediately, keyUp after tapMinHold.
       await tester.tap(find.bySemanticsLabel('NEXT'));
       await tester.pump();
-      final events = q.drain();
-      expect(events, hasLength(2));
+      var events = q.drain();
+      expect(events, hasLength(1));
       expect(events[0].type, EventType.keyDown);
       expect(events[0].data1, DoomKey.equals);
-      expect(events[1].type, EventType.keyUp);
       await tester.pump(const Duration(milliseconds: 200));
+      events = q.drain();
+      expect(events, hasLength(1));
+      expect(events[0].type, EventType.keyUp);
+      expect(events[0].data1, DoomKey.equals);
     }
 
     await check(const OverlaySettings(), const Size(800, 1400)); // portrait

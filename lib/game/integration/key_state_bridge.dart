@@ -8,6 +8,8 @@
 // (ActionKeys.keysFor), so it follows the player's intent regardless of which
 // physical key (arrows / WASD / touch) produced it.
 
+import 'package:flutter/foundation.dart' show debugPrint;
+
 import '../../engine/input/doomkeys.dart';
 import '../../engine/math/fixed.dart';
 import '../../input_actions/action_dispatcher.dart';
@@ -54,6 +56,18 @@ class KeyStateBridge {
       if (down(0x30 + slot)) {
         _keys.weapon = slot;
         break;
+      }
+    }
+
+    // Per-tic confirmation that a momentary tap survived to be sampled. Logs
+    // only on the tics where USE / weapon-cycle keys are observed down, so it
+    // stays quiet during normal play. grep `adb logcat` for `[touch]`.
+    if (kTouchInputDebugLog) {
+      if (_keys.use) debugPrint('[touch] tic sampled USE down');
+      if (down(DoomKey.minus)) debugPrint('[touch] tic sampled PREV weapon');
+      if (down(DoomKey.equals)) debugPrint('[touch] tic sampled NEXT weapon');
+      if (_keys.weapon != 0) {
+        debugPrint('[touch] tic sampled weapon slot ${_keys.weapon}');
       }
     }
 

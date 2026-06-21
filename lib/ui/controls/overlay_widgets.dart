@@ -41,6 +41,10 @@ class _OverlayHoldButtonState extends State<OverlayHoldButton> {
   bool _down = false;
 
   void _press() {
+    if (kTouchInputDebugLog) {
+      debugPrint('[touch] button ${widget.label} '
+          '(${widget.action.name}) ${widget.momentary ? "tap" : "press"}');
+    }
     if (widget.momentary) {
       widget.sink.tapAction(widget.action);
       setState(() => _down = true);
@@ -149,6 +153,10 @@ class _OverlayWeaponButtonState extends State<OverlayWeaponButton> {
   bool _down = false;
 
   void _press() {
+    if (kTouchInputDebugLog) {
+      debugPrint('[touch] weaponButton ${widget.label} '
+          '(${widget.action.name}) tap');
+    }
     widget.sink.tapAction(widget.action);
     setState(() => _down = true);
     Future<void>.delayed(const Duration(milliseconds: 120), () {
@@ -566,6 +574,9 @@ class _DpadArmState extends State<_DpadArm> {
   bool _down = false;
 
   void _press() {
+    if (kTouchInputDebugLog) {
+      debugPrint('[touch] dpad ${widget.label} (${widget.action.name}) tap');
+    }
     widget.sink.tapAction(widget.action);
     setState(() => _down = true);
     Future<void>.delayed(const Duration(milliseconds: 120), () {

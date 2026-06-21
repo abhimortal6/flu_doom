@@ -211,12 +211,16 @@ class _TouchControlsOverlayState extends State<TouchControlsOverlay> {
               constraints.maxWidth >= constraints.maxHeight;
           // Scale down a touch in portrait to leave room.
           final double scale = s.scale * (landscape ? 1.0 : 0.9);
-          final double stickSize = 160 * scale;
-          final double fireBtn = 84 * scale;
-          final double btn = 60 * scale;
-          final double smallBtn = 48 * scale;
-          final double weaponBtn = 56 * scale;
-          final double gap = 12 * scale;
+          // Less-bulky defaults (the overlay scale setting still multiplies on
+          // top). Trimmed from the previous 160/84/60/48/56 so the buttons stop
+          // dominating the screen while staying comfortably thumb-tappable
+          // (>=40 logical px hit targets at scale 1.0).
+          final double stickSize = 140 * scale;
+          final double fireBtn = 68 * scale;
+          final double btn = 48 * scale;
+          final double smallBtn = 40 * scale;
+          final double weaponBtn = 42 * scale;
+          final double gap = 10 * scale;
 
           // ---- LOOK region: the side of the screen WITHOUT the stick. For
           // right-handed, stick is left so the camera owns the right side;
@@ -253,6 +257,10 @@ class _TouchControlsOverlayState extends State<TouchControlsOverlay> {
                 icon: Icons.touch_app,
                 size: btn,
                 opacity: op,
+                // USE is edge-triggered in the playsim (one use per press), so a
+                // momentary tap is correct AND routes through tapAction's
+                // min-hold so a quick tap survives a 35 Hz tic sample.
+                momentary: true,
               ),
               SizedBox(width: gap),
               OverlayHoldButton(

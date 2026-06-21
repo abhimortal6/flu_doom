@@ -42,14 +42,19 @@ Future<void> _expectTapPostsKey(
   q.drain(); // clear anything pending
   await tester.tap(find.bySemanticsLabel(label));
   await tester.pump();
-  final events = q.drain();
-  expect(events, hasLength(2), reason: '$label should post down+up');
+  // Min-hold: the keyDown edge lands immediately so the menu (discrete-event
+  // reader) responds on key-down; the keyUp is deferred so the key survives a
+  // per-tic key-state sample.
+  final List<DoomEvent> events = q.drain();
+  expect(events, hasLength(1), reason: '$label should post keyDown now');
   expect(events[0].type, EventType.keyDown, reason: '$label down');
   expect(events[0].data1, expectedKey, reason: '$label down key');
-  expect(events[1].type, EventType.keyUp, reason: '$label up');
-  expect(events[1].data1, expectedKey, reason: '$label up key');
-  // Let the momentary-flash timer fire so no timer is pending at teardown.
+  // Let the min-hold + flash timers fire; the keyUp lands and no timer pends.
   await tester.pump(const Duration(milliseconds: 200));
+  final List<DoomEvent> after = q.drain();
+  expect(after, hasLength(1), reason: '$label should post keyUp after hold');
+  expect(after[0].type, EventType.keyUp, reason: '$label up');
+  expect(after[0].data1, expectedKey, reason: '$label up key');
 }
 
 void main() {
