@@ -12,6 +12,7 @@ import 'package:flutter/services.dart';
 import '../../input_actions/controls_settings.dart';
 import '../../input_actions/game_action.dart';
 import '../../input_actions/key_bindings.dart';
+import '../controls/controls_customize_screen.dart';
 
 class ControlsSettingsScreen extends StatefulWidget {
   const ControlsSettingsScreen({
@@ -61,6 +62,26 @@ class _ControlsSettingsScreenState extends State<ControlsSettingsScreen> {
     widget.onChanged?.call(_overlay, _bindings);
   }
 
+  Future<void> _openCustomize() async {
+    final OverlaySettings? result = await Navigator.of(context).push<OverlaySettings>(
+      MaterialPageRoute<OverlaySettings>(
+        builder: (_) => ControlsCustomizeScreen(
+          store: widget.store,
+          initial: _overlay,
+          onChanged: (ov) {
+            // Live-apply while the customizer is open.
+            setState(() => _overlay = ov);
+            widget.onChanged?.call(_overlay, _bindings);
+          },
+        ),
+      ),
+    );
+    if (result != null) {
+      setState(() => _overlay = result);
+      widget.onChanged?.call(_overlay, _bindings);
+    }
+  }
+
   Future<void> _rebind(GameAction action) async {
     final LogicalKeyboardKey? captured = await showDialog<LogicalKeyboardKey>(
       context: context,
@@ -96,6 +117,7 @@ class _ControlsSettingsScreenState extends State<ControlsSettingsScreen> {
           final Widget overlaySection = _OverlaySection(
             settings: _overlay,
             onChanged: _setOverlay,
+            onCustomize: _openCustomize,
           );
           final Widget bindingSection = _BindingSection(
             bindings: _bindings,
@@ -129,10 +151,15 @@ class _ControlsSettingsScreenState extends State<ControlsSettingsScreen> {
 }
 
 class _OverlaySection extends StatelessWidget {
-  const _OverlaySection({required this.settings, required this.onChanged});
+  const _OverlaySection({
+    required this.settings,
+    required this.onChanged,
+    required this.onCustomize,
+  });
 
   final OverlaySettings settings;
   final void Function(OverlaySettings) onChanged;
+  final VoidCallback onCustomize;
 
   @override
   Widget build(BuildContext context) {
@@ -196,6 +223,17 @@ class _OverlaySection extends StatelessWidget {
             onSelectionChanged: (sel) =>
                 onChanged(settings.copyWith(handed: sel.first)),
           ),
+        ),
+        ListTile(
+          key: const Key('overlayCustomize'),
+          leading: const Icon(Icons.open_with),
+          title: const Text('Customize layout'),
+          subtitle: const Text(
+            'Drag each control to a custom position '
+            '(separate portrait / landscape)',
+          ),
+          trailing: const Icon(Icons.chevron_right),
+          onTap: onCustomize,
         ),
       ],
     );

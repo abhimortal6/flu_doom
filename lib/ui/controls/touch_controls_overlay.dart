@@ -26,6 +26,7 @@ import '../../input_actions/analog_input.dart';
 import '../../input_actions/controls_settings.dart';
 import '../../input_actions/game_action.dart';
 import 'overlay_button_id.dart';
+import 'overlay_layout.dart';
 import 'overlay_widgets.dart';
 
 /// Which control scheme the overlay presents.
@@ -197,8 +198,14 @@ class _TouchControlsOverlayState extends State<TouchControlsOverlay> {
     );
   }
 
-  // ---- GAMEPLAY mode: the existing stick / look / fire / use / weapon /
-  // utility overlay, shown only during active level play. ----
+  // ---- GAMEPLAY mode: the stick / look / fire / use / weapon / utility
+  // overlay, shown only during active level play. ----
+  //
+  // Each control is placed ABSOLUTELY via [OverlayLayout]: its normalized
+  // center is the saved per-orientation override if the user has dragged it
+  // (settings.positionsFor(landscape)), else the built-in corner-cluster
+  // default. The layout clamps every body fully on-screen. scale / opacity /
+  // handedness still apply (they feed the layout + the widgets).
   Widget _buildGameplay(BuildContext context) {
     final OverlaySettings s = widget.settings;
     final double op = s.opacity;
@@ -209,181 +216,118 @@ class _TouchControlsOverlayState extends State<TouchControlsOverlay> {
         builder: (context, constraints) {
           final bool landscape =
               constraints.maxWidth >= constraints.maxHeight;
-          // Scale down a touch in portrait to leave room.
-          final double scale = s.scale * (landscape ? 1.0 : 0.9);
-          // Less-bulky defaults (the overlay scale setting still multiplies on
-          // top). Trimmed from the previous 160/84/60/48/56 so the buttons stop
-          // dominating the screen while staying comfortably thumb-tappable
-          // (>=40 logical px hit targets at scale 1.0).
-          final double stickSize = 140 * scale;
-          final double fireBtn = 68 * scale;
-          final double btn = 48 * scale;
-          final double smallBtn = 40 * scale;
-          final double weaponBtn = 42 * scale;
-          final double gap = 10 * scale;
-
-          // ---- LOOK region: the side of the screen WITHOUT the stick. For
-          // right-handed, stick is left so the camera owns the right side;
-          // mirrored for left-handed. It spans ~62% of the width and the full
-          // height EXCEPT a band along the bottom where the stick sits (so a
-          // stick drag isn't also read as a look drag). The action buttons are
-          // stacked above this region and win its touches where they overlap.
-          final double lookFraction = 0.62;
-          final double lookWidth = constraints.maxWidth * lookFraction;
-          final Widget lookRegion = Positioned(
-            top: 0,
-            bottom: 0,
-            left: leftHanded ? 0 : constraints.maxWidth - lookWidth,
-            width: lookWidth,
-            child: LookCameraRegion(analog: widget.analog),
-          );
-
-          // ---- Movement stick (analog, movement only).
-          final Widget movement = OverlayMoveStick(
-            analog: widget.analog,
-            size: stickSize,
-            opacity: op,
-          );
-
-          // ---- Primary action cluster: FIRE (large) + USE.
-          final Widget primaryActions = Row(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.end,
-            children: <Widget>[
-              OverlayHoldButton(
-                action: GameAction.use,
-                sink: widget.sink,
-                label: 'USE',
-                icon: Icons.touch_app,
-                size: btn,
-                opacity: op,
-                // USE is edge-triggered in the playsim (one use per press), so a
-                // momentary tap is correct AND routes through tapAction's
-                // min-hold so a quick tap survives a 35 Hz tic sample.
-                momentary: true,
-              ),
-              SizedBox(width: gap),
-              OverlayHoldButton(
-                action: GameAction.fire,
-                sink: widget.sink,
-                label: 'FIRE',
-                icon: Icons.gps_fixed,
-                size: fireBtn,
-                opacity: op,
-              ),
-            ],
-          );
-
-          // ---- Secondary cluster: weapon switch. COMPACT icon-only chevron
-          // circles (◀ wpn ▶), same size as the small utility buttons — no wide
-          // text pills. Each is a momentary tap posting the prev/next-weapon
-          // DoomKey, which the play-sim resolves into a real weapon change
-          // (cycling to the fist on prev). Sits ABOVE the look region in the
-          // Stack (same as FIRE/USE) so its taps win over the camera drag.
-          final Widget secondaryActions = Row(
-            mainAxisSize: MainAxisSize.min,
-            children: <Widget>[
-              OverlayWeaponButton(
-                action: GameAction.prevWeapon,
-                sink: widget.sink,
-                label: 'PREV',
-                icon: Icons.chevron_left,
-                size: weaponBtn,
-                opacity: op,
-              ),
-              SizedBox(width: gap),
-              OverlayWeaponButton(
-                action: GameAction.nextWeapon,
-                sink: widget.sink,
-                label: 'NEXT',
-                icon: Icons.chevron_right,
-                size: weaponBtn,
-                opacity: op,
-              ),
-            ],
-          );
-
-          // ---- Top-edge utility cluster: menu / automap / pause.
-          final Widget utility = Row(
-            mainAxisSize: MainAxisSize.min,
-            children: <Widget>[
-              OverlayHoldButton(
-                action: GameAction.menuToggle,
-                sink: widget.sink,
-                label: 'MENU',
-                icon: Icons.menu,
-                size: smallBtn,
-                opacity: op,
-                momentary: true,
-              ),
-              SizedBox(width: gap),
-              OverlayHoldButton(
-                action: GameAction.automap,
-                sink: widget.sink,
-                label: 'MAP',
-                icon: Icons.map,
-                size: smallBtn,
-                opacity: op,
-                momentary: true,
-              ),
-              SizedBox(width: gap),
-              OverlayHoldButton(
-                action: GameAction.pause,
-                sink: widget.sink,
-                label: 'II',
-                icon: Icons.pause,
-                size: smallBtn,
-                opacity: op,
-                momentary: true,
-              ),
-            ],
-          );
-
-          final EdgeInsets pad = EdgeInsets.all(16 * scale);
-
-          // movement = bottom-left (right-handed) / bottom-right (left-handed).
-          final Alignment movementAlign =
-              leftHanded ? Alignment.bottomRight : Alignment.bottomLeft;
-          // action cluster opposite the stick.
-          final Alignment actionsAlign =
-              leftHanded ? Alignment.bottomLeft : Alignment.bottomRight;
-
           return SafeArea(
-            child: Stack(
-              children: <Widget>[
-                // 1. LOOK region (bottom of the z-order so buttons win).
-                lookRegion,
-                // 2. Movement stick.
-                Align(
-                  alignment: movementAlign,
-                  child: Padding(padding: pad, child: movement),
-                ),
-                // 3. Utility cluster: top of the action side.
-                Align(
-                  alignment:
-                      leftHanded ? Alignment.topLeft : Alignment.topRight,
-                  child: Padding(padding: pad, child: utility),
-                ),
-                // 4. Action clusters: weapons above, fire/use low. These are
-                //    above the look region so their taps take priority.
-                Align(
-                  alignment: actionsAlign,
-                  child: Padding(
-                    padding: pad,
-                    child: Column(
-                      mainAxisSize: MainAxisSize.min,
-                      crossAxisAlignment: leftHanded
-                          ? CrossAxisAlignment.start
-                          : CrossAxisAlignment.end,
-                      children: <Widget>[
-                        secondaryActions,
-                        SizedBox(height: gap),
-                        primaryActions,
-                      ],
-                    ),
+            child: LayoutBuilder(
+              builder: (context, inner) {
+                final OverlayLayout layout = OverlayLayout(
+                  area: Size(inner.maxWidth, inner.maxHeight),
+                  landscape: landscape,
+                  leftHanded: leftHanded,
+                  scale: s.scale,
+                );
+                final Map<String, ButtonPosition> overrides =
+                    s.positionsFor(landscape);
+
+                // ---- LOOK region: the side of the screen WITHOUT the stick.
+                // Sits at the BOTTOM of the z-order so the action buttons win
+                // their overlapping touches (Flutter hit-tests top-of-stack
+                // first). Independent of per-button positions — it's the broad
+                // drag-to-turn camera band, not a repositionable control.
+                final double lookFraction = 0.62;
+                final double lookWidth = inner.maxWidth * lookFraction;
+                final Widget lookRegion = Positioned(
+                  top: 0,
+                  bottom: 0,
+                  left: leftHanded ? 0 : inner.maxWidth - lookWidth,
+                  width: lookWidth,
+                  child: LookCameraRegion(analog: widget.analog),
+                );
+
+                // Build each repositionable control (id -> widget).
+                final Map<String, Widget> controls = <String, Widget>{
+                  OverlayButtonId.movementStick: OverlayMoveStick(
+                    analog: widget.analog,
+                    size: layout.sizeFor(OverlayButtonId.movementStick),
+                    opacity: op,
                   ),
-                ),
-              ],
+                  OverlayButtonId.use: OverlayHoldButton(
+                    action: GameAction.use,
+                    sink: widget.sink,
+                    label: 'USE',
+                    icon: Icons.touch_app,
+                    size: layout.sizeFor(OverlayButtonId.use),
+                    opacity: op,
+                    momentary: true,
+                  ),
+                  OverlayButtonId.fire: OverlayHoldButton(
+                    action: GameAction.fire,
+                    sink: widget.sink,
+                    label: 'FIRE',
+                    icon: Icons.gps_fixed,
+                    size: layout.sizeFor(OverlayButtonId.fire),
+                    opacity: op,
+                  ),
+                  OverlayButtonId.prevWeapon: OverlayWeaponButton(
+                    action: GameAction.prevWeapon,
+                    sink: widget.sink,
+                    label: 'PREV',
+                    icon: Icons.chevron_left,
+                    size: layout.sizeFor(OverlayButtonId.prevWeapon),
+                    opacity: op,
+                  ),
+                  OverlayButtonId.nextWeapon: OverlayWeaponButton(
+                    action: GameAction.nextWeapon,
+                    sink: widget.sink,
+                    label: 'NEXT',
+                    icon: Icons.chevron_right,
+                    size: layout.sizeFor(OverlayButtonId.nextWeapon),
+                    opacity: op,
+                  ),
+                  OverlayButtonId.menu: OverlayHoldButton(
+                    action: GameAction.menuToggle,
+                    sink: widget.sink,
+                    label: 'MENU',
+                    icon: Icons.menu,
+                    size: layout.sizeFor(OverlayButtonId.menu),
+                    opacity: op,
+                    momentary: true,
+                  ),
+                  OverlayButtonId.automap: OverlayHoldButton(
+                    action: GameAction.automap,
+                    sink: widget.sink,
+                    label: 'MAP',
+                    icon: Icons.map,
+                    size: layout.sizeFor(OverlayButtonId.automap),
+                    opacity: op,
+                    momentary: true,
+                  ),
+                  OverlayButtonId.pause: OverlayHoldButton(
+                    action: GameAction.pause,
+                    sink: widget.sink,
+                    label: 'II',
+                    icon: Icons.pause,
+                    size: layout.sizeFor(OverlayButtonId.pause),
+                    opacity: op,
+                    momentary: true,
+                  ),
+                };
+
+                final List<Widget> stack = <Widget>[lookRegion];
+                for (final String id in OverlayButtonId.all) {
+                  final ButtonPosition center =
+                      layout.centerFor(id, overrides);
+                  final Offset tl = layout.topLeftFor(id, center);
+                  stack.add(
+                    Positioned(
+                      left: tl.dx,
+                      top: tl.dy,
+                      child: controls[id]!,
+                    ),
+                  );
+                }
+
+                return Stack(children: stack);
+              },
             ),
           );
         },

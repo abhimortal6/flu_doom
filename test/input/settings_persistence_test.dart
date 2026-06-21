@@ -91,6 +91,28 @@ void main() {
     expect(store.loadOverlay().visible, isFalse);
   });
 
+  testWidgets('Customize layout tile opens the customizer route',
+      (tester) async {
+    tester.view.physicalSize = const Size(700, 1400); // portrait, single column
+    tester.view.devicePixelRatio = 1.0;
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+
+    final store = await ControlsSettingsStore.open();
+    await tester.pumpWidget(
+      MaterialApp(home: ControlsSettingsScreen(store: store)),
+    );
+
+    final tile = find.byKey(const Key('overlayCustomize'));
+    await tester.scrollUntilVisible(tile, 200);
+    await tester.tap(tile);
+    await tester.pumpAndSettle();
+
+    // The customizer route is up (its SAVE action is present).
+    expect(find.byKey(const Key('customizeSave')), findsOneWidget);
+    expect(find.text('Customize layout'), findsWidgets);
+  });
+
   testWidgets('rebind dialog captures a key and updates binding',
       (tester) async {
     // Portrait so there is a single scroll view (landscape splits into two).

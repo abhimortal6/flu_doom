@@ -17,15 +17,30 @@ enum HandedLayout { right, left }
 
 /// Optional per-button position override (drag-to-reposition). Stored as a
 /// fractional offset of the available area (0..1) so it survives orientation /
-/// resolution changes.
+/// resolution changes. (dx, dy) is the normalized CENTER of the button within
+/// the overlay's usable area: dx = 0 is the left edge, dx = 1 the right edge,
+/// dy = 0 the top, dy = 1 the bottom. The live overlay multiplies these by the
+/// actual pixel extent (and clamps so the button body stays on-screen), so the
+/// same fraction lands proportionally on any resolution.
 class ButtonPosition {
   const ButtonPosition(this.dx, this.dy);
-  final double dx; // 0..1 fraction of width
-  final double dy; // 0..1 fraction of height
+  final double dx; // 0..1 fraction of width (button center)
+  final double dy; // 0..1 fraction of height (button center)
+
+  /// Clamp both axes into [0, 1].
+  ButtonPosition clamped() =>
+      ButtonPosition(dx.clamp(0.0, 1.0), dy.clamp(0.0, 1.0));
 
   Map<String, dynamic> toJson() => {'dx': dx, 'dy': dy};
   factory ButtonPosition.fromJson(Map<String, dynamic> j) =>
       ButtonPosition((j['dx'] as num).toDouble(), (j['dy'] as num).toDouble());
+
+  @override
+  bool operator ==(Object other) =>
+      other is ButtonPosition && other.dx == dx && other.dy == dy;
+
+  @override
+  int get hashCode => Object.hash(dx, dy);
 }
 
 /// Configuration for the touch overlay.
@@ -36,7 +51,8 @@ class OverlaySettings {
     this.scale = 1.0,
     this.handed = HandedLayout.right,
     this.lookSensitivity = 2.0,
-    this.positions = const <String, ButtonPosition>{},
+    this.positionsPortrait = const <String, ButtonPosition>{},
+    this.positionsLandscape = const <String, ButtonPosition>{},
   });
 
   /// Whether the overlay is shown at all.
@@ -58,9 +74,31 @@ class OverlaySettings {
   /// slider just scales around that baseline.
   final double lookSensitivity;
 
-  /// Optional drag-repositioned button overrides, keyed by overlay button id
-  /// (see [OverlayButtonId]). Empty = use default layout positions.
-  final Map<String, ButtonPosition> positions;
+  /// Optional drag-repositioned button overrides for PORTRAIT, keyed by overlay
+  /// button id (see [OverlayButtonId]). Empty = use the built-in default layout.
+  /// Kept SEPARATE from landscape because the two layouts differ — dragging a
+  /// button in one orientation must not move it in the other.
+  final Map<String, ButtonPosition> positionsPortrait;
+
+  /// Optional drag-repositioned button overrides for LANDSCAPE. See
+  /// [positionsPortrait].
+  final Map<String, ButtonPosition> positionsLandscape;
+
+  /// The override map for the given orientation (`landscape == true` picks the
+  /// landscape map).
+  Map<String, ButtonPosition> positionsFor(bool landscape) =>
+      landscape ? positionsLandscape : positionsPortrait;
+
+  /// A copy with [positions] applied as the override map for the given
+  /// orientation, leaving the other orientation untouched.
+  OverlaySettings withPositionsFor(
+    bool landscape,
+    Map<String, ButtonPosition> positions,
+  ) {
+    return landscape
+        ? copyWith(positionsLandscape: positions)
+        : copyWith(positionsPortrait: positions);
+  }
 
   OverlaySettings copyWith({
     bool? visible,
@@ -68,7 +106,8 @@ class OverlaySettings {
     double? scale,
     HandedLayout? handed,
     double? lookSensitivity,
-    Map<String, ButtonPosition>? positions,
+    Map<String, ButtonPosition>? positionsPortrait,
+    Map<String, ButtonPosition>? positionsLandscape,
   }) {
     return OverlaySettings(
       visible: visible ?? this.visible,
@@ -76,7 +115,8 @@ class OverlaySettings {
       scale: scale ?? this.scale,
       handed: handed ?? this.handed,
       lookSensitivity: lookSensitivity ?? this.lookSensitivity,
-      positions: positions ?? this.positions,
+      positionsPortrait: positionsPortrait ?? this.positionsPortrait,
+      positionsLandscape: positionsLandscape ?? this.positionsLandscape,
     );
   }
 
@@ -86,11 +126,23 @@ class OverlaySettings {
     'scale': scale,
     'handed': handed.name,
     'lookSensitivity': lookSensitivity,
-    'positions': positions.map((k, v) => MapEntry(k, v.toJson())),
+    'positionsPortrait':
+        positionsPortrait.map((k, v) => MapEntry(k, v.toJson())),
+    'positionsLandscape':
+        positionsLandscape.map((k, v) => MapEntry(k, v.toJson())),
   };
 
+  static Map<String, ButtonPosition> _decodePositions(Object? raw) {
+    final Map src = (raw as Map?) ?? const {};
+    return src.map(
+      (k, v) => MapEntry(
+        k as String,
+        ButtonPosition.fromJson((v as Map).cast<String, dynamic>()),
+      ),
+    );
+  }
+
   factory OverlaySettings.fromJson(Map<String, dynamic> j) {
-    final posRaw = (j['positions'] as Map?) ?? const {};
     return OverlaySettings(
       visible: j['visible'] as bool? ?? true,
       opacity: (j['opacity'] as num?)?.toDouble() ?? 0.45,
@@ -100,12 +152,12 @@ class OverlaySettings {
           .where((h) => h.name == j['handed'])
           .cast<HandedLayout?>()
           .firstWhere((h) => true, orElse: () => HandedLayout.right)!,
-      positions: posRaw.map(
-        (k, v) => MapEntry(
-          k as String,
-          ButtonPosition.fromJson((v as Map).cast<String, dynamic>()),
-        ),
+      // Back-compat: an older single 'positions' map (orientation-agnostic) is
+      // adopted as the portrait map so previously-saved layouts aren't lost.
+      positionsPortrait: _decodePositions(
+        j['positionsPortrait'] ?? j['positions'],
       ),
+      positionsLandscape: _decodePositions(j['positionsLandscape']),
     );
   }
 
