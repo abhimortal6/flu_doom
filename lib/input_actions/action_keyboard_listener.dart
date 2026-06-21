@@ -55,14 +55,24 @@ class _ActionKeyboardListenerState extends State<ActionKeyboardListener> {
     final action = widget.bindings.actionFor(event.logicalKey);
     if (action == null) return KeyEventResult.ignored;
 
+    // Edge-triggered, like vanilla Doom: a real KeyDownEvent is the only thing
+    // that presses (one keyDown edge / one ref-count increment), and only a
+    // KeyUpEvent releases. The OS delivers a KeyRepeatEvent for every
+    // auto-repeat tick while a key is held; we must NOT treat those as fresh
+    // presses, or each repeat would re-post DoomEvent.keyDown and re-trigger
+    // sounds/actions while the key stays physically down. The key remains
+    // "down" in the sink's key-state set from the initial KeyDownEvent until
+    // the KeyUpEvent, so continuous movement / auto-fire still work.
     if (event is KeyDownEvent) {
       widget.sink.pressAction(action);
       return KeyEventResult.handled;
     } else if (event is KeyUpEvent) {
       widget.sink.releaseAction(action);
       return KeyEventResult.handled;
+    } else if (event is KeyRepeatEvent) {
+      // OS auto-repeat: swallow it (so it doesn't bubble) but emit no edge.
+      return KeyEventResult.handled;
     }
-    // KeyRepeatEvent: Doom does its own auto-repeat; swallow but don't re-press.
     return KeyEventResult.ignored;
   }
 
