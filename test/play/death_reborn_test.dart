@@ -8,6 +8,7 @@ import 'dart:io';
 import 'dart:typed_data';
 
 import 'package:flutter_test/flutter_test.dart';
+import '../helpers/wad_fixture.dart';
 
 import 'package:flu_doom/engine/wad/wad.dart';
 import 'package:flu_doom/game/world/world.dart';
@@ -37,6 +38,13 @@ bool isPlayerDeathState(int idx) =>
     (idx >= St.sPlayXdie1 && idx <= St.sPlayXdie1 + 8);
 
 void main() {
+  // Bring-your-own-WAD: the WAD is gitignored and absent in a clean clone/CI.
+  // Skip (don't fail) the WAD-dependent tests when assets/doom1.wad is missing.
+  if (!wadFixtureExists) {
+    test('WAD-dependent tests skipped (no assets/doom1.wad)', () {},
+        skip: wadFixtureSkip);
+    return;
+  }
   group('death -> reborn', () {
     test('lethal damage kills the player and starts the death animation', () {
       final PlaySim sim = PlaySim(loadWorld());

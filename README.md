@@ -1,18 +1,45 @@
 # flu_doom
 
-**flu_doom** is a from-scratch, **pure-Dart (NO FFI)** pure Dart port of vanilla
-Doom — the software renderer, play simulation, sound (DMX SFX) and FM music
-(Nuked-OPL3) — ported faithfully from [Chocolate Doom](https://github.com/chocolate-doom/chocolate-doom)
-(GPLv2) and Nuked-OPL3 to Flutter. It boots to the title screen, opens the main
-menu, starts a New Game and plays through the bundled IWAD's first episode
-(E1M1 onward):
-full software-rendered 3D, player movement and collision, enemy AI, weapons,
-hitscan/missiles, pickups, doors/switches, intermissions, sound and music — all
-in Dart, with no native game code.
+**flu_doom** is a from-scratch, **pure-Dart (NO FFI)** pure Dart port of the
+vanilla Doom engine, running as a **Flutter app**. The software renderer, play
+simulation (BSP, mobjs/thinkers, physics, collision, combat), WAD loading,
+16.16 fixed-point and BAM-angle math, the DMX sound dispatch, and the full FM
+music path (WAD MUS → MIDI → GENMIDI → Nuked-OPL3 → PCM) are all hand-ported
+**faithfully into Dart** from [Chocolate Doom](https://github.com/chocolate-doom/chocolate-doom)
+(GPLv2) and [Nuked-OPL3](https://github.com/nukeykt/Nuked-OPL3) (LGPL). There is
+no native Doom binary and no FFI binding — the engine *is* the Dart code.
+
+Flutter provides the shell around that pure-Dart engine: the engine's 320×200
+indexed framebuffer is converted to a `dart:ui` image each frame, the game loop
+runs off a `Ticker`/vsync, and input, menus and on-screen controls are Flutter
+widgets. The only native dependency is **`flutter_soloud`**, used purely as the
+low-latency audio backend that plays PCM/WAV buffers flu_doom synthesizes itself
+in Dart (it does not generate any game audio).
 
 > The engine relies on 32-bit signed integer overflow for fixed-point math. It
 > targets **Dart native (AOT) integer semantics** (macOS / iOS / Android). The
 > **web target is out of scope** (JS doubles break the fixed-point arithmetic).
+
+---
+
+## Bring your own WAD
+
+**flu_doom ships NO game data.** It contains no maps, textures, sounds, or music —
+only the engine. On first run the app opens an **in-app import screen** and asks
+you to supply a Doom-format **IWAD** from your device; the file is copied into
+the app's documents directory and loaded on every subsequent launch.
+
+You can use any vanilla-compatible IWAD:
+
+- **Freedoom** — a free, BSD-licensed, vanilla-compatible IWAD. Download
+  `freedoom1.wad` (Phase 1) or `freedoom2.wad` (Phase 2) from
+  <https://freedoom.github.io/> and import it. This is the recommended way to
+  run flu_doom with no proprietary data.
+- **Retail / shareware Doom** — your own legally-obtained `doom.wad`,
+  `doom1.wad` (shareware), `doom2.wad`, etc. also load.
+
+flu_doom does not redistribute Freedoom or any commercial WAD; you provide the
+game data yourself.
 
 ---
 
@@ -29,8 +56,8 @@ flutter run -d ios --release
 flutter run -d android --release
 ```
 
-**IMPORTANT — native build dependency:** the `flutter_soloud` audio plugin builds
-a native backend with CMake. If you don't have it:
+**Native build dependency — CMake:** the `flutter_soloud` audio plugin builds a
+native backend with CMake. If you don't have it:
 
 ```sh
 brew install cmake
@@ -47,7 +74,7 @@ flutter clean && flutter run -d macos --release
 Tests and lint:
 
 ```sh
-flutter test       # unit + golden-ish render/play/state/sound suites
+flutter test       # render / play / state / sound suites
 flutter analyze    # lint (flutter_lints)
 ```
 
@@ -57,19 +84,22 @@ flutter analyze    # lint (flutter_lints)
 
 | Done | Deferred / TODO |
 |------|------------------|
-| Title screen → main menu → New Game (episode/skill) → E1M1 | Screen-melt **wipe** (`f_wipe.c`) on state transitions |
-| 1:1 software renderer: BSP, walls, flats/planes, sky, sprites, masked passes | Attract **demo loop** (`D_AdvanceDemo` + demo playback ticcmds) |
-| Player move / thrust / view bob / **collision** (no tunnelling) | **Save / load** (`p_saveg.c`; Load/Save menu items are drawn but inert) |
-| Full **combat**: enemy AI + line-of-sight, weapons/psprites, hitscan + missiles, pickups, damage | Walk-over **line specials** (`P_CrossSpecialLine`) |
-| **Doors / switches / use-specials** (`P_UseLines` 1:1, manual-use + tagged/remote doors) | Unported switch `EV_` bodies: `EV_DoFloor`/`EV_DoPlat`/`EV_DoCeiling`/`EV_BuildStairs`/`EV_DoDonut`/`EV_LightTurnOn` |
-| **Damaging floor sectors** + secret-sector counting | **Finale end-text** (GS_FINALE state exists; the crawl/end text is not rendered) |
-| **Level flow**: E1M1 → intermission → E1M2 with inventory carry-over | **Boss / keen** special triggers |
+| Title screen → main menu → New Game (episode/skill) → first map | Attract **demo loop** (`D_AdvanceDemo` + demo playback ticcmds) |
+| 1:1 software renderer: BSP, walls, flats/planes, sky, sprites, masked passes | **Save / load** (`p_saveg.c`; Load/Save menu items draw but are inert) |
+| **Widescreen** rendering + **frame interpolation** (smooth motion above 35 Hz) | Walk-over **line specials** (`P_CrossSpecialLine`) |
+| Player move / thrust / view bob / **collision** (no tunnelling) | Unported switch `EV_` bodies (`EV_DoFloor`/`EV_DoPlat`/`EV_DoCeiling`/`EV_BuildStairs`/`EV_DoDonut`/`EV_LightTurnOn`) |
+| Full **combat**: enemy AI + line-of-sight, weapons/psprites, hitscan + missiles, pickups, damage | **Finale end-text** crawl (GS_FINALE state exists; text not rendered) |
+| **Doors / switches / use-specials** (`P_UseLines` 1:1, manual + tagged/remote) | **Boss / keen** special triggers |
+| **Damaging floor sectors** + secret-sector counting | Screen-melt **wipe** on state transitions |
+| **Level flow**: first map → intermission → next with inventory carry-over | True real-time **music streaming** / authored loop points (song is rendered offline to one looped PCM buffer) |
 | Player **death → reborn** + damage/bonus **palette tint** | **Web target** (fixed-point JS int issue) |
-| **SFX** (DMX decode → s_sound port → flutter_soloud) | True real-time **music streaming** / authored loop points (song is rendered offline to one looped PCM buffer) |
+| **SFX** (DMX decode → s_sound port → flutter_soloud) | |
 | **FM music**: WAD MUS → MIDI → GENMIDI → Nuked-OPL3 → PCM | |
 | **Pause** (music + sim) on menu / pause | |
-| **Input**: touch overlay + rebindable hardware keyboard + settings screen (persisted) | |
-| Portrait / landscape layouts | |
+| **Mobile touch controls** + on-screen control customization | |
+| **Graphics options** screen; portrait / landscape layouts | |
+| **Input**: touch overlay + rebindable hardware keyboard, persisted settings | |
+| **Bring-your-own-WAD** import flow (no bundled game data) | |
 
 ---
 
@@ -83,6 +113,7 @@ implementations.
 lib/
   main.dart                       App entry: MaterialApp -> DoomGame.
   game/doom_game.dart             Integration: wires every subsystem into the loop.
+  game/wad_store.dart             Imported-IWAD location/copy/load (bring-your-own-WAD).
 
   engine/                         Pure-Dart engine (no game-specific knowledge)
     math/   fixed, angle, tables  16.16 fixed-point + BAM angles + trig LUTs.
@@ -103,11 +134,12 @@ lib/
     integration/  *_adapter, key_state_bridge   injected-interface adapters.
 
   ui/
-    hud/      status_bar, hud, fonts, patch_draw, graphics_cache
-    menu/     menu              m_menu (main/episode/skill/options).
-    automap/  automap           am_map.
-    controls/ touch_controls_overlay, overlay_widgets, ...   on-screen controls.
-    settings/ controls_settings_screen   key-binding / overlay settings route.
+    hud/        status_bar, hud, fonts, patch_draw, graphics_cache
+    menu/       menu              m_menu (main/episode/skill/options).
+    automap/    automap           am_map.
+    controls/   touch_controls_overlay, overlay_widgets, ...   on-screen controls.
+    settings/   controls_settings_screen   key-binding / overlay settings route.
+    wad_import/ first-run WAD-import UI (bring-your-own-WAD).
 
   input_actions/                  GameAction model, key bindings, persistence.
 ```
@@ -117,34 +149,33 @@ lib/
 | File | Governs |
 |------|---------|
 | `lib/INTERFACES.md` | Phase-1 foundation: fixed/angle math, WAD, palette/framebuffer/patch, events, game loop |
-| `lib/CONTRACTS_WORLD.md` | Shared world data layer: geometry structs, `Level.load`, `World`/`Viewpoint`, `TicCmd`; renderer-reads / playsim-mutates boundary |
+| `lib/CONTRACTS_WORLD.md` | Shared world data layer: geometry structs, `Level.load`, `World`/`Viewpoint`, `TicCmd` |
 | `lib/CONTRACTS_RENDER.md` | Software renderer: BSP, segs, planes, things, draw, `SpriteSource` |
-| `lib/CONTRACTS_PLAY.md` | Play simulation: mobj/thinker/player, physics, collision, doors/plats/floors/lights, ticcmd build |
-| `lib/CONTRACTS_COMBAT.md` | Combat wave: damage, hitscan/missiles, enemy AI, weapon psprites, pickups; the `info.c`/`d_items.c` data tables |
-| `lib/CONTRACTS_STATE.md` | Game-state machine + UI: `g_game`, status bar, HUD, automap, menu, intermission (injected `WorldView`/`PlayerStatus`) |
+| `lib/CONTRACTS_PLAY.md` | Play simulation: mobj/thinker/player, physics, collision, doors/plats/floors/lights |
+| `lib/CONTRACTS_COMBAT.md` | Combat wave: damage, hitscan/missiles, enemy AI, weapon psprites, pickups |
+| `lib/CONTRACTS_STATE.md` | Game-state machine + UI: `g_game`, status bar, HUD, automap, menu, intermission |
 | `lib/CONTRACTS_INPUT.md` | Input / controls UX: touch overlay, rebindable keyboard, settings persistence |
+| `lib/CONTRACTS_INTERP.md` | Frame interpolation: smoothing motion above the 35 Hz tic |
+| `lib/CONTRACTS_WIPE.md` | Screen-melt wipe module (`f_wipe.c`) interface |
+| `CONTRACTS_WIDESCREEN.md` | Widescreen rendering geometry |
 
 ---
 
-## Licensing / credits
+## License
 
-- **Code** is a port of **Chocolate Doom** (GPLv2) and **Nuked-OPL3**.
-  Accordingly, **this project is licensed under the GNU GPL v2**.
-- **Game data** is currently the **shareware `doom1.wad`** (© id Software),
-  bundled (`assets/doom1.wad`) for **original-Doom compatibility testing**. The
-  app boots to the original DOOM title screen and the shareware E1M1.
-- **Freedoom Phase 1** (`assets/freedoom1.wad`,
-  [freedoom.github.io](https://freedoom.github.io/)) — a **BSD-licensed**,
-  vanilla-compatible drop-in IWAD (ExMy maps, standard texture/sprite/sound/music
-  lump names) the engine loads exactly like `doom1.wad` — **remains available in
-  `assets/`** and can be swapped back to make the app freely redistributable by
-  flipping `kWadAsset` in `lib/game/doom_game.dart` and the bundled asset in
-  `pubspec.yaml`. (Freedoom Phase 1 has 4 episodes; the in-game menu currently
-  exposes 3, and its E1M1 is a different, larger map than shareware Doom's.)
-- The test suite asserts shareware-Doom-specific map data (E1M1 geometry, the
-  `STARTAN3`/`FLOOR4_8`/`PLAYA1` lumps, player start, etc.), loading
-  `doom1.wad` directly from the filesystem via `File('assets/doom1.wad')`.
-- **Dependencies**: `flutter_soloud` (low-latency audio backend) and
-  `shared_preferences` (settings persistence) are used under their own licenses.
-- The C reference sources used for the port live in `reference/`,
-  which is **gitignored** and not redistributed.
+flu_doom is licensed under the **GNU General Public License, version 2 (GPLv2)** —
+see [`LICENSE`](LICENSE) for the full text. Because the engine is a derivative
+port of Chocolate Doom (GPLv2), the project as a whole is GPLv2.
+
+Third-party attributions — Chocolate Doom, Nuked-OPL3, Freedoom, `flutter_soloud`,
+and the other Flutter/Dart packages — are listed in [`NOTICE`](NOTICE).
+
+Contributions: see [`CONTRIBUTING.md`](CONTRIBUTING.md).
+
+### Trademark disclaimer
+
+**DOOM is a trademark of id Software LLC**, a ZeniMax Media / Microsoft company.
+flu_doom is an **independent, unofficial reimplementation** and is **not
+affiliated with, authorized by, or endorsed by** id Software, ZeniMax, or
+Microsoft. The GPLv2 covers the source code only and grants no trademark
+rights — **do not distribute this software under the "Doom" name.**

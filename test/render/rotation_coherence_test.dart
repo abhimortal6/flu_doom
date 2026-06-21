@@ -10,6 +10,7 @@
 // clear / angle-math regression that only manifests while turning is caught.
 
 import 'package:flutter_test/flutter_test.dart';
+import '../helpers/wad_fixture.dart';
 
 import 'package:flu_doom/engine/math/angle.dart';
 import 'package:flu_doom/engine/math/fixed.dart';
@@ -53,6 +54,13 @@ int _distinctInBand(Framebuffer fb, int y0, int y1) {
 }
 
 void main() {
+  // Bring-your-own-WAD: the WAD is gitignored and absent in a clean clone/CI.
+  // Skip (don't fail) the WAD-dependent tests when assets/doom1.wad is missing.
+  if (!wadFixtureExists) {
+    test('WAD-dependent tests skipped (no assets/doom1.wad)', () {},
+        skip: wadFixtureSkip);
+    return;
+  }
   test('walls stay coherent across a full 360-degree rotation', () {
     final World world = loadE1M1();
     final MapThing start =

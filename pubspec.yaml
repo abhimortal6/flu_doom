@@ -35,8 +35,17 @@ dependencies:
   # Use with the CupertinoIcons class for iOS style icons.
   cupertino_icons: ^1.0.8
 
-  # Persistence for input/controls settings (key bindings + overlay config).
+  # Persistence for input/controls settings (key bindings + overlay config) and
+  # the imported-WAD path (bring-your-own-WAD).
   shared_preferences: ^2.3.2
+
+  # Bring-your-own-WAD: native file picker to import the user's own Doom IWAD.
+  # The app ships no game data; the user selects a .wad on first run.
+  file_picker: ^8.1.2
+
+  # App documents/support directory: the imported WAD is copied here so it
+  # survives the original pick being moved/deleted and loads like a normal file.
+  path_provider: ^2.1.4
 
   # Low-latency game-audio backend for sound effects. Platform-channel plugin
   # (engine logic stays pure Dart); supports in-memory WAV buffers (loadMem),
@@ -66,12 +75,10 @@ flutter:
   # the material Icons class.
   uses-material-design: true
 
-  assets:
-    # Bundled game IWAD: the shareware doom1.wad (© id Software), bundled for
-    # original-Doom compatibility testing. Freedoom Phase 1 (freedoom1.wad)
-    # remains in assets/ and can be swapped back by re-bundling it here and
-    # flipping kWadAsset in lib/game/doom_game.dart.
-    - assets/doom1.wad
+  # BRING-YOUR-OWN-WAD: the app intentionally ships NO game data. The user
+  # imports their own Doom-format IWAD at runtime (see lib/ui/wad_import/ and
+  # lib/game/wad_store.dart). assets/*.wad remain on disk for tests + dev but are
+  # deliberately NOT bundled here, so no copyrighted game data ships in the app.
 
   # To add assets to your application, add an assets section, like this:
   # _example_assets:

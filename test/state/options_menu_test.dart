@@ -15,6 +15,7 @@ import 'dart:io';
 import 'dart:typed_data';
 
 import 'package:flutter_test/flutter_test.dart';
+import '../helpers/wad_fixture.dart';
 import 'package:flu_doom/engine/input/doomkeys.dart';
 import 'package:flu_doom/engine/input/event.dart';
 import 'package:flu_doom/engine/video/framebuffer.dart';
@@ -54,6 +55,13 @@ MenuController _intoSound(MenuController menu) {
 }
 
 void main() {
+  // Bring-your-own-WAD: the WAD is gitignored and absent in a clean clone/CI.
+  // Skip (don't fail) the WAD-dependent tests when assets/doom1.wad is missing.
+  if (!wadFixtureExists) {
+    test('WAD-dependent tests skipped (no assets/doom1.wad)', () {},
+        skip: wadFixtureSkip);
+    return;
+  }
   test('thermometer + sound graphics lumps load', () {
     final GraphicsCache gc = _gc();
     for (final String n in <String>[

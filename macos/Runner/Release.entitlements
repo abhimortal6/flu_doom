@@ -4,5 +4,9 @@
 <dict>
 	<key>com.apple.security.app-sandbox</key>
 	<true/>
+	<!-- Bring-your-own-WAD: allow reading the user-picked .wad via NSOpenPanel
+	     (file_picker). Read-only powerbox access to user-selected files. -->
+	<key>com.apple.security.files.user-selected.read-only</key>
+	<true/>
 </dict>
 </plist>

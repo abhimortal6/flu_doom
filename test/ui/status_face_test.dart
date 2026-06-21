@@ -4,6 +4,7 @@
 // tic, and special states (god/dead) take priority.
 
 import 'package:flutter_test/flutter_test.dart';
+import '../helpers/wad_fixture.dart';
 
 import 'package:flu_doom/engine/video/framebuffer.dart';
 import 'package:flu_doom/engine/video/patch.dart';
@@ -28,6 +29,13 @@ int _faceRegionHash(Framebuffer fb) {
 }
 
 void main() {
+  // Bring-your-own-WAD: the WAD is gitignored and absent in a clean clone/CI.
+  // Skip (don't fail) the WAD-dependent tests when assets/doom1.wad is missing.
+  if (!wadFixtureExists) {
+    test('WAD-dependent tests skipped (no assets/doom1.wad)', () {},
+        skip: wadFixtureSkip);
+    return;
+  }
   final File wadFile = File('assets/doom1.wad');
 
   test('idle face holds for several tics (not per-tic flicker)', () {

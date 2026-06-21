@@ -2,6 +2,7 @@ import 'dart:io';
 import 'dart:typed_data';
 
 import 'package:flutter_test/flutter_test.dart';
+import '../helpers/wad_fixture.dart';
 import 'package:flu_doom/engine/video/framebuffer.dart';
 import 'package:flu_doom/engine/wad/wad.dart';
 import 'package:flu_doom/engine/input/doomkeys.dart';
@@ -17,6 +18,13 @@ World _loadWorld() {
 }
 
 void main() {
+  // Bring-your-own-WAD: the WAD is gitignored and absent in a clean clone/CI.
+  // Skip (don't fail) the WAD-dependent tests when assets/doom1.wad is missing.
+  if (!wadFixtureExists) {
+    test('WAD-dependent tests skipped (no assets/doom1.wad)', () {},
+        skip: wadFixtureSkip);
+    return;
+  }
   test('AM_Drawer draws E1M1 line geometry (non-blank, lines > 0)', () {
     final World world = _loadWorld();
     expect(world.level.lines.length, greaterThan(0));

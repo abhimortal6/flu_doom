@@ -45,3 +45,8 @@ app.*.map.json
 /android/app/release
 reference/
 debug_shots/
+
+# Game data is never committed. flu_doom ships no WAD; users bring their own
+# IWAD at runtime (see the in-app WAD-import screen). Keep all WADs out of git.
+*.wad
+assets/*.wad

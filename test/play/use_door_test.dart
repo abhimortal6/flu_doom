@@ -12,6 +12,7 @@ import 'dart:io';
 
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
+import '../helpers/wad_fixture.dart';
 
 import 'package:flu_doom/engine/input/event.dart';
 import 'package:flu_doom/engine/math/angle.dart';
@@ -55,6 +56,13 @@ Line _placePlayerAtDoor(PlaySim sim) {
 }
 
 void main() {
+  // Bring-your-own-WAD: the WAD is gitignored and absent in a clean clone/CI.
+  // Skip (don't fail) the WAD-dependent tests when assets/doom1.wad is missing.
+  if (!wadFixtureExists) {
+    test('WAD-dependent tests skipped (no assets/doom1.wad)', () {},
+        skip: wadFixtureSkip);
+    return;
+  }
   group('Use chain — input -> BT_USE', () {
     test('Space key-state produces BT_USE via the real input/g_build path', () {
       final EventQueue queue = EventQueue();

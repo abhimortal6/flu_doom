@@ -7,6 +7,7 @@
 import 'dart:typed_data';
 
 import 'package:flutter_test/flutter_test.dart';
+import '../helpers/wad_fixture.dart';
 
 import 'package:flu_doom/engine/math/angle.dart';
 import 'package:flu_doom/engine/math/fixed.dart';
@@ -31,6 +32,13 @@ int _fnv1a64(Uint8List px) {
 const int _kGoldenFrameHash = 0x36c705a0ae0e1ce0;
 
 void main() {
+  // Bring-your-own-WAD: the WAD is gitignored and absent in a clean clone/CI.
+  // Skip (don't fail) the WAD-dependent tests when assets/doom1.wad is missing.
+  if (!wadFixtureExists) {
+    test('WAD-dependent tests skipped (no assets/doom1.wad)', () {},
+        skip: wadFixtureSkip);
+    return;
+  }
   group('lerpFixed (fixed-point linear interpolation)', () {
     test('endpoints are exact', () {
       expect(lerpFixed(100, 200, 0), 100);

@@ -6,6 +6,7 @@ import 'dart:typed_data';
 
 import 'package:flutter_soloud/flutter_soloud.dart' show LoadMode;
 import 'package:flutter_test/flutter_test.dart';
+import '../helpers/wad_fixture.dart';
 
 import 'package:flu_doom/engine/sound/audio_engine.dart';
 import 'package:flu_doom/engine/sound/dmx.dart';
@@ -16,6 +17,13 @@ import 'package:flu_doom/game/play/mobj.dart';
 import 'package:flu_doom/game/play/sounds.dart';
 
 void main() {
+  // Bring-your-own-WAD: the WAD is gitignored and absent in a clean clone/CI.
+  // Skip (don't fail) the WAD-dependent tests when assets/doom1.wad is missing.
+  if (!wadFixtureExists) {
+    test('WAD-dependent tests skipped (no assets/doom1.wad)', () {},
+        skip: wadFixtureSkip);
+    return;
+  }
   late WadFile wad;
 
   setUpAll(() {

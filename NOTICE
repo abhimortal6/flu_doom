@@ -1,0 +1,116 @@
+flu_doom — THIRD-PARTY NOTICES
+=============================
+
+flu_doom is a from-scratch, pure-Dart port of the vanilla Doom
+engine, packaged as a Flutter application. It is a derivative work of the
+projects listed below and is therefore distributed under the GNU General
+Public License, version 2 (see the LICENSE file for the full text).
+
+This file is an attribution notice. It names each upstream work, its license,
+its author(s), where to obtain it, and how flu_doom uses it. It does not
+reproduce the upstream license texts in full; obtain those from the URLs given.
+
+--------------------------------------------------------------------------------
+ENGINE — derived source (this is what makes flu_doom GPLv2)
+--------------------------------------------------------------------------------
+
+Chocolate Doom
+  License : GNU General Public License, version 2 (GPLv2)
+  Authors : id Software (original DOOM source); Simon Howard and the
+            Chocolate Doom contributors (the conservatively-accurate port that
+            flu_doom ports).
+  URL     : https://github.com/chocolate-doom/chocolate-doom
+  Use     : flu_doom's entire game engine — the software renderer (BSP, segs,
+            planes, sky, sprites, masked passes), the play simulation
+            (mobjs/thinkers, physics, collision, combat, doors/switches,
+            line specials), WAD loading, 16.16 fixed-point and BAM-angle math,
+            the DMX sound dispatch, and the MUS->MIDI (mus2mid) and GENMIDI
+            paths — is a faithfully, pure Dart port of Chocolate Doom's
+            C into pure Dart. flu_doom is NOT a wrapper around, nor an FFI
+            binding to, any native Doom binary; the engine logic is reimplemented
+            in Dart. Because it is a derivative of GPLv2 code, flu_doom as a whole
+            is licensed under GPLv2.
+
+Nuked-OPL3
+  License : GNU Lesser General Public License, version 2.1 (LGPL-2.1)
+  Author  : Alexey Khokholov ("Nuke.YKT")
+  URL     : https://github.com/nukeykt/Nuked-OPL3
+  Use     : The FM-music synthesizer. flu_doom ports Nuked-OPL3's
+            cycle-accurate Yamaha YMF262 (OPL3) emulator into pure Dart to
+            render the GENMIDI instrument set to PCM for in-game music. The
+            LGPL terms are compatible with this project's GPLv2 distribution.
+
+--------------------------------------------------------------------------------
+SUGGESTED FREE GAME DATA (not bundled, not a code dependency)
+--------------------------------------------------------------------------------
+
+Freedoom (Phase 1 / Phase 2)
+  License : Modified (3-clause) BSD License
+  Authors : The Freedoom project contributors
+  URL     : https://freedoom.github.io/
+  Use     : flu_doom ships NO game data. Freedoom is a free, vanilla-compatible
+            IWAD that users may supply at runtime via the in-app WAD-import
+            screen. flu_doom neither bundles nor redistributes Freedoom; it is
+            named here only as a recommended, freely-obtainable IWAD.
+
+--------------------------------------------------------------------------------
+RUNTIME DEPENDENCIES (Flutter/Dart packages, used as-is, unmodified)
+--------------------------------------------------------------------------------
+
+flutter_soloud
+  License : MIT License (see the package page on pub.dev)
+  URL     : https://pub.dev/packages/flutter_soloud
+  Use     : The one native dependency. flu_doom's audio engine produces PCM
+            entirely in Dart (DMX SFX decode + the Nuked-OPL3 music render);
+            flutter_soloud is the low-latency native backend that plays those
+            in-memory PCM/WAV buffers (loadMem), mixing many concurrent voices
+            with per-voice volume and stereo pan on macOS / iOS / Android.
+
+shared_preferences
+  License : BSD 3-Clause License
+  URL     : https://pub.dev/packages/shared_preferences
+  Use     : Persisting user settings — input/control key bindings, on-screen
+            overlay configuration, and the imported-WAD path.
+
+file_picker
+  License : MIT License
+  URL     : https://pub.dev/packages/file_picker
+  Use     : Bring-your-own-WAD. The native file picker that lets the user
+            select their own Doom-format IWAD on first run.
+
+path_provider
+  License : BSD 3-Clause License
+  URL     : https://pub.dev/packages/path_provider
+  Use     : Locating the app documents/support directory, into which the
+            imported WAD is copied so it survives the original file being
+            moved or deleted and loads like a normal local file.
+
+cupertino_icons
+  License : MIT License
+  URL     : https://pub.dev/packages/cupertino_icons
+  Use     : Icon font for Cupertino-style UI elements.
+
+Flutter SDK / flutter_lints
+  License : BSD 3-Clause License
+  URL     : https://flutter.dev/
+  Use     : Application framework (framebuffer -> dart:ui image present path,
+            Ticker/vsync game loop, input and UI) and the recommended lint set.
+
+--------------------------------------------------------------------------------
+REFERENCE SOURCES
+--------------------------------------------------------------------------------
+
+The C reference sources used to perform the port (Chocolate Doom and
+Nuked-OPL3) live under reference/, which is gitignored and is NOT redistributed
+as part of flu_doom. They are retained locally only to keep the Dart port
+faithful, faithfully, to the originals.
+
+--------------------------------------------------------------------------------
+TRADEMARK
+--------------------------------------------------------------------------------
+
+DOOM is a trademark of id Software LLC, a ZeniMax Media / Microsoft company.
+flu_doom is an independent, unofficial reimplementation and is not affiliated
+with, authorized by, or endorsed by id Software, ZeniMax, or Microsoft. The
+GPLv2 covers the source code only and grants no trademark rights; do not
+distribute this software under the "Doom" name.

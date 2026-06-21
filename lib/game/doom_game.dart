@@ -16,11 +16,11 @@
 // fb.toImage(palette) -> VideoView.
 
 import 'dart:async';
+import 'dart:io';
 import 'dart:typed_data';
 import 'dart:ui' as ui;
 
 import 'package:flutter/material.dart';
-import 'package:flutter/services.dart' show rootBundle;
 
 import '../engine/input/event.dart';
 import '../engine/render/renderer.dart';
@@ -44,6 +44,7 @@ import '../ui/controls/touch_controls_overlay.dart';
 import '../ui/debug_overlay.dart';
 import '../ui/settings/controls_settings_screen.dart';
 import '../ui/settings/graphics_settings_screen.dart';
+import '../ui/wad_import/wad_import_screen.dart';
 import 'integration/key_state_bridge.dart';
 import 'integration/player_status_adapter.dart';
 import 'integration/psprite_adapter.dart';
@@ -52,14 +53,8 @@ import 'play/playsim.dart';
 import 'play/sounds.dart';
 import 'state/game_state.dart';
 import 'state/level_flow.dart';
+import 'wad_store.dart';
 import 'world/world.dart';
-
-// Bundled game IWAD: the shareware doom1.wad (© id Software), bundled for
-// original-Doom compatibility testing. Freedoom Phase 1 (freedoom1.wad) — a
-// BSD-licensed, vanilla-compatible IWAD that the engine loads exactly like
-// doom1.wad — remains available in assets/ and can be swapped back by flipping
-// this constant and the bundled asset in pubspec.yaml.
-const String kWadAsset = 'assets/doom1.wad';
 
 class DoomGame extends StatefulWidget {
   const DoomGame({super.key});
@@ -140,6 +135,13 @@ class _DoomGameState extends State<DoomGame>
   bool _decodingFrame = false;
   bool _ready = false;
 
+  // Bring-your-own-WAD: the app ships no game data. [_wadStore] persists the
+  // imported WAD path; [_needsWadImport] is true when no usable WAD is stored
+  // (or the stored one failed to load), in which case the import screen is shown
+  // instead of booting the game.
+  WadStore? _wadStore;
+  bool _needsWadImport = false;
+
   // ---- Screen-melt wipe (f_wipe.c / D_Display driving logic) ----
   // wipegamestate tracks the last *presented* gamestate; when gs.gamestate
   // differs we trigger a melt (D_Display's `wipe = gamestate != wipegamestate`).
@@ -153,10 +155,48 @@ class _DoomGameState extends State<DoomGame>
   @override
   void initState() {
     super.initState();
-    _boot();
+    _resolveWadThenBoot();
   }
 
-  Future<void> _boot() async {
+  /// Resolve the active WAD (bring-your-own-WAD) before booting. If a previously
+  /// imported WAD is stored AND still exists, boot with it; otherwise show the
+  /// import screen. Never crashes — any failure falls back to the import screen.
+  Future<void> _resolveWadThenBoot() async {
+    WadStore? store;
+    try {
+      store = await WadStore.open();
+    } catch (_) {
+      // shared_preferences unavailable: treat as "needs import" (can't persist,
+      // but the user can still pick a WAD for this session).
+    }
+    _wadStore = store;
+
+    final String? path = store?.resolveExistingPath();
+    if (path == null) {
+      if (mounted) {
+        setState(() {
+          _needsWadImport = true;
+          _ready = false;
+        });
+      }
+      return;
+    }
+    await _boot(path);
+  }
+
+  /// Called by the import screen once a valid WAD has been imported (and its
+  /// path persisted). Switches from the import screen to booting the game.
+  Future<void> _onWadImported(String wadPath) async {
+    if (mounted) {
+      setState(() {
+        _needsWadImport = false;
+        _error = null;
+      });
+    }
+    await _boot(wadPath);
+  }
+
+  Future<void> _boot(String wadPath) async {
     try {
       // Load persisted controls settings (overlay + bindings); never throws.
       try {
@@ -179,11 +219,25 @@ class _DoomGameState extends State<DoomGame>
         // Fall back to defaults if persistence is unavailable.
       }
 
-      final ByteData bytes = await rootBundle.load(kWadAsset);
-      final WadFile wad = WadFile.fromBytes(bytes.buffer.asUint8List(
-        bytes.offsetInBytes,
-        bytes.lengthInBytes,
-      ));
+      // Bring-your-own-WAD: load the imported IWAD/PWAD from its stored path.
+      // If reading/parsing fails (corrupt / deleted), DON'T crash — fall back to
+      // the import screen so the user can re-import.
+      final WadFile wad;
+      try {
+        final Uint8List wadBytes = await File(wadPath).readAsBytes();
+        wad = WadFile.fromBytes(wadBytes);
+      } catch (e) {
+        debugPrint('[flu_doom] stored WAD failed to load ($e); '
+            'returning to import screen');
+        if (mounted) {
+          setState(() {
+            _needsWadImport = true;
+            _ready = false;
+            _error = null;
+          });
+        }
+        return;
+      }
 
       // All 14 PLAYPAL palettes; ST_doPaletteStuff selects one per frame to
       // tint the screen (damage red / pickup yellow / radsuit green).
@@ -577,6 +631,30 @@ class _DoomGameState extends State<DoomGame>
     _analog.reset();
   }
 
+  /// Bring-your-own-WAD: forget the current WAD and return to the import screen
+  /// so the user can pick a different IWAD/PWAD. Tears down the running game so
+  /// the new WAD boots cleanly from scratch.
+  Future<void> _changeWad() async {
+    _sink.releaseAll();
+    _analog.reset();
+    await _wadStore?.clear();
+    // Stop the loop + audio for the outgoing game; _boot rebuilds them.
+    _loop?.dispose();
+    _loop = null;
+    unawaited(_music?.dispose() ?? Future<void>.value());
+    _music = null;
+    unawaited(_audio?.dispose() ?? Future<void>.value());
+    _audio = null;
+    _sfxHook = null;
+    if (mounted) {
+      setState(() {
+        _ready = false;
+        _needsWadImport = true;
+        _error = null;
+      });
+    }
+  }
+
   Future<void> _openControlsSettings() async {
     final ControlsSettingsStore? store = _store;
     if (store == null) return;
@@ -613,6 +691,23 @@ class _DoomGameState extends State<DoomGame>
 
   @override
   Widget build(BuildContext context) {
+    // Bring-your-own-WAD: no usable WAD -> show the import screen. The store may
+    // be null if shared_preferences failed; we still build a transient store so
+    // the picker works for this session (importFromBytes/Path tolerate it).
+    if (_needsWadImport) {
+      final WadStore? store = _wadStore;
+      if (store == null) {
+        return const ColoredBox(
+          color: Color(0xFF101010),
+          child: Center(
+            child: Text('Storage unavailable — cannot import a WAD.',
+                style: TextStyle(color: Color(0xFFFF8080), fontSize: 14)),
+          ),
+        );
+      }
+      return WadImportScreen(store: store, onImported: _onWadImported);
+    }
+
     if (_error != null) {
       return ColoredBox(
         color: const Color(0xFF200000),
@@ -716,6 +811,11 @@ class _DoomGameState extends State<DoomGame>
                       _MiniButton(
                         label: 'graphics',
                         onTap: _openGraphicsSettings,
+                      ),
+                      const SizedBox(width: 8),
+                      _MiniButton(
+                        label: 'wad',
+                        onTap: _changeWad,
                       ),
                       const SizedBox(width: 8),
                       _MiniButton(
