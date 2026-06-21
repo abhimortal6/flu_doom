@@ -1,4 +1,4 @@
-// sfxinfo_t table — ported 1:1 from Chocolate Doom src/doom/sounds.c S_sfx[].
+// sfxinfo_t table — ported from Chocolate Doom src/doom/sounds.c S_sfx[].
 //
 // Indexed by the `Sfx.*` ordinals (sounds.dart / sfxenum_t). Each entry carries
 // the lump name suffix, priority, singularity group, link target and pitch/

@@ -1,4 +1,4 @@
-// Weapon sprite animation and weapon action functions, ported 1:1 from
+// Weapon sprite animation and weapon action functions, ported from
 // Chocolate Doom src/doom/p_pspr.c (and the weapon data in d_items.c, already
 // transcribed into info_tables.dart's weaponInfo[]).
 //
@@ -7,7 +7,7 @@
 // P_CheckAmmo / P_FireWeapon / P_DropWeapon / P_CalcSwing) and all 23 weapon
 // A_* functions (incl. A_BFGSpray).
 //
-// Faithfulness is mandatory: this is a port, not a paraphrase.
+// Faithfulness is mandatory: this is a faithful port, not a paraphrase.
 //
 // Dependencies are read-only facades:
 //   - [MobjSim] (p_mobj.dart): P_SetMobjState, P_SpawnMobj.
@@ -771,7 +771,7 @@ const int pwStrength = 1;
 /// ENTRYPOINT for COMBAT-D: call this BEFORE [ActionRegistry.registerAllStubs]
 /// (register uses last-write-wins; calling before stubs leaves the real bodies
 /// in place since stubs use putIfAbsent). The [shoot] argument is accepted for
-/// symmetry with the other waves' registrars; the weapon actions reach the
+/// symmetry with the other registrars; the weapon actions reach the
 /// shooter facade through [pspr.shoot].
 void registerWeaponActions(ActionRegistry r, Pspr pspr, Shoot shoot) {
   void wpn(String name, void Function(Player, Pspdef) fn) {

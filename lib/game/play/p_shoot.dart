@@ -1,4 +1,4 @@
-// Shooting / aiming / missiles, ported 1:1 from Chocolate Doom:
+// Shooting / aiming / missiles, ported from Chocolate Doom:
 //   - P_PathTraverse + the intercept routines (p_maputl.c),
 //   - P_AimLineAttack / P_LineAttack / PTR_AimTraverse / PTR_ShootTraverse /
 //     P_RadiusAttack / PIT_RadiusAttack (p_map.c),
@@ -11,7 +11,7 @@
 // mobjSim.spawnMobj (CONTRACTS_COMBAT §2/§10). The intercept buffer + the
 // `trace` divline are instance fields here (no C file-scope statics).
 //
-// Faithfulness is mandatory: this is a port, not a paraphrase.
+// Faithfulness is mandatory: this is a faithful port, not a paraphrase.
 
 import '../../engine/math/angle.dart';
 import '../../engine/math/fixed.dart';

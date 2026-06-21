@@ -1,4 +1,4 @@
-// Interactions — damage, kills and pickups, ported 1:1 from Chocolate Doom
+// Interactions — damage, kills and pickups, ported from Chocolate Doom
 // src/doom/p_inter.c.
 //
 // [Interactions] is the facade COMBAT-A (enemy AI) and COMBAT-B (weapons) call
@@ -6,7 +6,7 @@
 // All randomness goes through pRandom() (CONTRACTS_COMBAT §8); every vanilla
 // S_StartSound site calls the injected [SoundHook] (§7).
 //
-// Faithfulness is mandatory: this is a port, not a paraphrase.
+// Faithfulness is mandatory: this is a faithful port, not a paraphrase.
 
 import '../../engine/math/angle.dart';
 import '../../engine/math/fixed.dart';

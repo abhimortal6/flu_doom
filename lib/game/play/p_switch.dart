@@ -1,9 +1,9 @@
-// Switch textures + buttons, ported 1:1 from Chocolate Doom src/p_switch.c:
+// Switch textures + buttons, ported from Chocolate Doom src/p_switch.c:
 //   - alphSwitchList[] (switchlist_t), P_InitSwitchList,
 //   - P_StartButton + the button timer (button_t / buttonlist),
 //   - P_ChangeSwitchTexture (the switch texture swap + sound).
 //
-// Faithfulness is mandatory: this is a port, not a paraphrase. C
+// Faithfulness is mandatory: this is a faithful port, not a paraphrase. C
 // file-scope globals (switchlist[], numswitches, buttonlist[]) become instance
 // fields on [SwitchManager]. The button countdown that vanilla runs inside
 // P_UpdateSpecials runs here from [tickButtons], called once per tic by the

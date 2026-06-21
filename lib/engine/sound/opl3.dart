@@ -1,4 +1,4 @@
-// Nuked OPL3 emulator — faithful pure Dart port to pure Dart.
+// Nuked OPL3 emulator — faithful port to pure Dart.
 //
 // Ported from Nuked-OPL3 (opl3.c / opl3.h), version 1.8.
 // Copyright (C) 2013-2020 Nuke.YKT

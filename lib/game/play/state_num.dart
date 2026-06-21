@@ -1,4 +1,4 @@
-// GENERATED 1:1 from reference/chocolate-doom/src/doom/info.h by
+// GENERATED from reference/chocolate-doom/src/doom/info.h by
 // tool/gen_info.py. Named statenum_t ordinals (St.*) referenced by code.
 // The full states[] table (info_tables.dart) is indexed by these ints.
 // DO NOT EDIT BY HAND.

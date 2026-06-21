@@ -1,4 +1,4 @@
-// GENERATED 1:1 from reference/chocolate-doom/src/doom/info.{c,h} by
+// GENERATED from reference/chocolate-doom/src/doom/info.{c,h} by
 // tool/gen_info.py. DO NOT EDIT BY HAND. State/sprite/mobjtype enums and
 // the State / MobjInfo struct definitions, faithful to vanilla.
 //

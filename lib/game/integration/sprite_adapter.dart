@@ -16,7 +16,7 @@
 //
 // `spriteNum` is the opaque key the renderer round-trips: here it is the
 // play-sim [SpriteNum] enum index (mobj.sprite.index), which matches the
-// `spriteNames[]` table 1:1.
+// `spriteNames[]` table exactly.
 
 import '../../engine/math/fixed.dart';
 import '../../engine/render/sprite_source.dart';

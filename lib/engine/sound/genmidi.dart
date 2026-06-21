@@ -1,4 +1,4 @@
-// GENMIDI instrument-lump parser, ported 1:1 from Chocolate Doom
+// GENMIDI instrument-lump parser, ported from Chocolate Doom
 // src/i_oplmusic.c (the genmidi_op_t / genmidi_voice_t / genmidi_instr_t
 // structs and LoadInstrumentTable).
 //

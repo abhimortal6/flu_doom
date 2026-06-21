@@ -8,7 +8,7 @@ sounds.h (sfx enum), d_items.c/.h (weaponinfo[]) and emits:
   lib/game/play/info_tables.dart (states[], mobjInfo[], Mt.*, weaponInfo[], doomedToMobjType)
   lib/game/play/sounds.dart      (Sfx.* sfx ordinals)
 
-pure Dart port: every value comes straight from the reference C.
+Faithful port: every value comes straight from the reference C.
 """
 import re, os, sys
 
@@ -183,7 +183,7 @@ def flags_dart(expr):
 # ============ EMIT info.dart ============
 def gen_info_dart():
     L = []
-    L.append('// GENERATED 1:1 from reference/chocolate-doom/src/doom/info.{c,h} by')
+    L.append('// GENERATED from reference/chocolate-doom/src/doom/info.{c,h} by')
     L.append('// tool/gen_info.py. DO NOT EDIT BY HAND. State/sprite/mobjtype enums and')
     L.append('// the State / MobjInfo struct definitions, faithful to vanilla.')
     L.append('//')
@@ -292,7 +292,7 @@ class MobjInfo {
 # ============ EMIT sounds.dart ============
 def gen_sounds_dart():
     L = []
-    L.append('// GENERATED 1:1 from reference/chocolate-doom/src/doom/sounds.h by')
+    L.append('// GENERATED from reference/chocolate-doom/src/doom/sounds.h by')
     L.append('// tool/gen_info.py. sfxenum_t ordinals used by mobjinfo[] sound columns')
     L.append('// and combat S_StartSound call sites. DO NOT EDIT BY HAND.')
     L.append('')
@@ -309,7 +309,7 @@ def gen_sounds_dart():
 # ============ EMIT state_num.dart ============
 def gen_state_num_dart():
     L = []
-    L.append('// GENERATED 1:1 from reference/chocolate-doom/src/doom/info.h by')
+    L.append('// GENERATED from reference/chocolate-doom/src/doom/info.h by')
     L.append('// tool/gen_info.py. Named statenum_t ordinals (St.*) referenced by code.')
     L.append('// The full states[] table (info_tables.dart) is indexed by these ints.')
     L.append('// DO NOT EDIT BY HAND.')
@@ -333,7 +333,7 @@ def gen_state_num_dart():
 # ============ EMIT info_tables.dart ============
 def gen_info_tables_dart():
     L = []
-    L.append('// GENERATED 1:1 from reference/chocolate-doom/src/doom/info.c + d_items.c by')
+    L.append('// GENERATED from reference/chocolate-doom/src/doom/info.c + d_items.c by')
     L.append('// tool/gen_info.py. The full vanilla states[] / mobjinfo[] / weaponinfo[]')
     L.append('// tables, plus the Mt.* mobjtype ordinals and the DoomEd->type map.')
     L.append('// DO NOT EDIT BY HAND.')

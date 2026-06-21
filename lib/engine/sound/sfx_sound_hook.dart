@@ -1,4 +1,4 @@
-// SfxSoundHook — the real SoundHook, porting Chocolate Doom s_sound.c 1:1.
+// SfxSoundHook — the real SoundHook, porting Chocolate Doom s_sound.c.
 //
 // Implements S_StartSound / S_StartSoundAtVolume (folded into one, as vanilla
 // S_StartSound is itself the AtVolume entry in Doom), S_AdjustSoundParams

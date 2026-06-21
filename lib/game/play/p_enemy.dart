@@ -1,4 +1,4 @@
-// Enemy thinking / AI + action pointers, ported 1:1 from Chocolate Doom
+// Enemy thinking / AI + action pointers, ported from Chocolate Doom
 // src/doom/p_enemy.c.
 //
 // [EnemyAi] holds the movement helpers (P_CheckMeleeRange / P_CheckMissileRange
@@ -17,7 +17,7 @@
 // playeringame[], gametic, the level for the brain-target scan) are injected
 // public fields wired by COMBAT-D.
 //
-// Faithfulness is mandatory: this is a port, not a paraphrase.
+// Faithfulness is mandatory: this is a faithful port, not a paraphrase.
 
 import '../../engine/math/angle.dart';
 import '../../engine/math/fixed.dart';

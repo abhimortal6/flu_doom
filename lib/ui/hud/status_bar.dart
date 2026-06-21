@@ -160,7 +160,7 @@ class StatusBar {
     return _lastCalc;
   }
 
-  /// ST_updateFaceWidget — strict port. Called once per tic from
+  /// ST_updateFaceWidget — faithful port. Called once per tic from
   /// [tick]. We lack the attacker direction (needs the attacker mobj), so the
   /// "turn toward damage source" branch falls back to the random look cycle;
   /// every other branch (priority ladder, evil grin on weapon pickup proxy,

@@ -1,6 +1,6 @@
-# flu_doom — Combat Contracts (Phase 3 / combat wave)
+# flu_doom — Combat Contracts (Phase 3 / combat)
 
-This document is the **frozen contract** for the COMBAT wave: a faithful
+This document is the **frozen contract** for the COMBAT phase: a faithful
 pure-Dart port of vanilla Doom's damage, hitscan/missile attacks, enemy AI,
 weapon psprites and pickups, from Chocolate Doom
 `src/doom/p_inter.c`, `p_pspr.c`, `p_enemy.c`, `p_map.c` (attack portion),
@@ -13,7 +13,7 @@ paraphrase vanilla; port it directly.** All gameplay randomness goes through the
 single shared `p_random.dart` (see §8).
 
 This is the GATE deliverable. The data tables (§0) are DONE and compile; the
-interfaces below (§1–§9) are FROZEN; the parallel fan-out partition is §10.
+interfaces below (§1–§9) are FROZEN; the file partition is §10.
 
 ---
 
@@ -39,7 +39,7 @@ fixed_t; monster `speed` is integer, missile `speed` is fixed_t — verbatim.
 **Every `A_*` name in `states[]` is registered as a log-once no-op stub** via
 `ActionRegistry.instance.registerAllStubs()` (called in the `PlaySim`
 constructor). The project compiles and runs the full state machine today; the
-fan-out agents REPLACE stubs with real bodies via `ActionRegistry.register(...)`
+combat modules REPLACE stubs with real bodies via `ActionRegistry.register(...)`
 (`putIfAbsent` semantics — registering a real action never clobbers another).
 
 > **Faithfulness note / interface decision:** the previous hand-written slice
@@ -340,21 +340,21 @@ screen through the EXISTING `PlaySpriteSource`/`MobjSprite` ->
 `SpriteNum`/`spriteNames` table already covers every combat sprite (BAL1, MISL,
 PLSS, BFS1, blood, puff, all corpses).
 
-**Fan-out agents MUST NOT touch `lib/engine/render/*` or
+**The combat modules MUST NOT touch `lib/engine/render/*` or
 `lib/game/integration/sprite_adapter.dart`.** The one renderer-adjacent value
 combat produces is `player.extraLight` (weapon muzzle flash); the renderer
 already supports `extralight` (CONTRACTS_RENDER §4) — wiring it is a future
-integration nicety, NOT part of this wave, and needs no renderer change.
+integration nicety, NOT part of this phase, and needs no renderer change.
 
 ---
 
-## 7. SoundHook — injectable, no-op now (audio is a LATER wave)
+## 7. SoundHook — injectable, no-op now (audio is a LATER phase)
 
-Audio is not implemented this wave, but **every combat call site that vanilla
+Audio is not implemented in this phase, but **every combat call site that vanilla
 sounds at MUST call the hook** so wiring real audio later is a one-line swap.
 
 ```dart
-// lib/game/play/sound_hook.dart  (owner: COMBAT-C creates; all agents call)
+// lib/game/play/sound_hook.dart  (owner: COMBAT-C creates; all callers use)
 abstract interface class SoundHook {
   /// S_StartSound(origin, sfx). origin is the Mobj (or null for ui/global);
   /// kept as Object? so play-sim need not depend on an audio type.
@@ -388,12 +388,12 @@ blood/puff counts, dropped-item, gib threshold, `A_BFGSpray`, etc.).
   stream.
 - `mRandom()` is the **cosmetic** generator (separate `rndindex`) for HUD/menu
   only; it must NOT be called from combat. (Existing `status_bar.dart` keeps its
-  own face rng; that is cosmetic and out of scope — combat agents do not touch
+  own face rng; that is cosmetic and out of scope — the combat code does not touch
   it.)
 - `clearRandom()` is called by `PlaySim.spawnLevel()` (already wired).
 - `p_lights.dart` currently uses a local LCG for light flashes (cosmetic, not
   gameplay-deterministic in vanilla terms); it is **out of scope** for this
-  wave — do not refactor it.
+  phase — do not refactor it.
 
 ---
 
@@ -402,14 +402,14 @@ blood/puff counts, dropped-item, gib threshold, `A_BFGSpray`, etc.).
 The combat code drives state changes through the EXISTING
 `MobjSim.setMobjState(mobj, stateNum)` (`p_mobj.dart`) — which already fires the
 named action and removes the mobj on `S_NULL`. Weapon psprite states go through
-COMBAT-B's `Pspr.setPsprite`. Neither COMBAT agent rewrites
+COMBAT-B's `Pspr.setPsprite`. Neither COMBAT module rewrites
 `MobjSim.setMobjState`; they only call it. (See §10 hazard for `p_mobj.dart`.)
 
 ---
 
-## 10. PARTITION PLAN — disjoint file ownership (the fan-out)
+## 10. PARTITION PLAN — disjoint file ownership
 
-Four agents, no two writing the same file. Shared deps below are **read-only**.
+Four modules, no two writing the same file. Shared deps below are **read-only**.
 
 ### COMBAT-A — Enemy AI + sight
 - **Owns (write):** `lib/game/play/p_enemy.dart` (new),
@@ -465,13 +465,13 @@ Four agents, no two writing the same file. Shared deps below are **read-only**.
    the new fields. If B needs a field B does not add it — it is C's deliverable;
    coordinate the field list from §5 up front (it is frozen here, so no
    coordination is needed at runtime).
-3. **`p_map.dart` / `p_maputl.dart`**: read-only for all combat agents. The
+3. **`p_map.dart` / `p_maputl.dart`**: read-only for all combat code. The
    intercept/divline/PathTraverse code goes in COMBAT-C's `p_shoot.dart`, NOT
    appended to `p_maputl.dart`, to keep those world-collision files untouched.
 4. **`playsim.dart` / `spawn.dart` / `p_user.dart` / `player_status_adapter.dart`**:
    ONLY COMBAT-D edits these, and D runs as a serial step after A/B/C, so there
    is no concurrent write.
-5. **Renderer + `sprite_adapter.dart`**: no agent writes them (§6).
+5. **Renderer + `sprite_adapter.dart`**: no combat code writes them (§6).
 
 ---
 

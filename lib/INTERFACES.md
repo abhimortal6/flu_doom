@@ -1,7 +1,7 @@
 # flu_doom — Stable Public Interfaces (Phase 1)
 
 This document defines the **stable public contracts** that all later modules
-build against. Parallel agents should code to these signatures. The foundation
+build against. All later modules code to these signatures. The foundation
 is a pure-Dart (no FFI) port of vanilla Doom (Chocolate Doom / doomgeneric),
 targeting **Dart native (AOT) integer semantics**.
 

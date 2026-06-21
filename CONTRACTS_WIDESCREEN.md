@@ -223,7 +223,7 @@ Add an opt-in dump test (pattern: `gfx_present_dump_test.dart`), e.g.
 - Render the SAME scene into a 320 framebuffer, blit onto the same 1280x720
   surface (letterboxed) -> `debug_shots/wide_4x3.png`.
 Run with `DUMP_WIDE=1 flutter test test/render/widescreen_dump_test.dart -d macos`.
-The integration will READ both PNGs and compare: widescreen must show MORE scene
+These screenshots verify widescreen shows MORE scene
 horizontally (wider FOV), correct vertical proportions (not squashed/fisheye),
 clean edges (no garbage columns), centered intact HUD, centered weapon.
 

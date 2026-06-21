@@ -1,4 +1,4 @@
-// MIDI file parser, ported 1:1 from Chocolate Doom src/midifile.c +
+// MIDI file parser, ported from Chocolate Doom src/midifile.c +
 // src/midifile.h.
 //
 // This reads the standard-MIDI output of [mus2mid] (an MThd header chunk

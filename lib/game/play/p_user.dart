@@ -155,7 +155,7 @@ class PlayerSim {
 
   /// P_DeathThink (p_user.c). Lowers the view to the corpse height, turns to
   /// face the attacker, fades the damage flash, and watches for BT_USE -> the
-  /// reborn request. Ported 1:1.
+  /// reborn request. Ported faithfully.
   void deathThink(Player player) {
     final Mobj mo = player.mo!;
 
@@ -311,7 +311,7 @@ class PlayerSim {
       }
     } else {
       // No psprite driver wired: keep the attack latch faithful so a later
-      // wave can attach the driver without re-plumbing input.
+      // phase can attach the driver without re-plumbing input.
       player.attackDown = (player.cmd.buttons & btAttack) != 0;
     }
 

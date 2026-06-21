@@ -16,7 +16,7 @@ import 'game_action.dart';
 /// phone via `adb logcat | grep '\[touch\]'`.
 ///
 /// Gated on `!kReleaseMode` so it emits in BOTH debug AND **profile** builds
-/// (the integration verifies on-device with a profile build) and is fully
+/// (for on-device verification with a profile build) and is fully
 /// compiled out of release. These logs are infrequent — only on discrete button
 /// presses / weapon-affecting tics — so they do not spam.
 const bool kTouchInputDebugLog = !kReleaseMode;

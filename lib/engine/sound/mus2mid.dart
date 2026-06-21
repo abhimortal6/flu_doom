@@ -1,4 +1,4 @@
-// MUS -> MIDI converter, ported 1:1 from Chocolate Doom src/mus2mid.c
+// MUS -> MIDI converter, ported from Chocolate Doom src/mus2mid.c
 // (Ben Ryves 2006). Converts a DMX MUS lump into a single-track, type-0
 // Standard MIDI File (MThd + one MTrk).
 //
@@ -112,7 +112,7 @@ class _MusReader {
 
 /// Convert a MUS lump to a Standard MIDI (type-0) file. Returns the MIDI bytes.
 ///
-/// 1:1 port of `mus2mid()` from mus2mid.c. Throws [Mus2MidException] on any
+/// Faithful port of `mus2mid()` from mus2mid.c. Throws [Mus2MidException] on any
 /// condition where the C returns failure (truncated input, bad event, etc.).
 Uint8List mus2mid(Uint8List mus) {
   final _MusReader musinput = _MusReader(mus);

@@ -14,7 +14,7 @@ import 'player.dart';
 const int _pwIronfeet = 3;
 
 /// P_PlayerInSpecialSector (p_spec.c). Called every tic frame that the player
-/// origin is in a special sector. Ported 1:1.
+/// origin is in a special sector. Ported faithfully.
 ///
 /// Dependencies vanilla reads as file-scope globals are passed in explicitly:
 /// [leveltime] (the per-tic clock; the `&0x1f` gate is the ~0.9s damage tick),

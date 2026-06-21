@@ -1,4 +1,4 @@
-// OPL MIDI player, ported 1:1 from Chocolate Doom src/i_oplmusic.c.
+// OPL MIDI player, ported from Chocolate Doom src/i_oplmusic.c.
 //
 // This is the GENMIDI->OPL3 voice engine: it loads the DMX GENMIDI instrument
 // bank (via [GenMidi]), allocates the 18 OPL3 voices, and programs the chip

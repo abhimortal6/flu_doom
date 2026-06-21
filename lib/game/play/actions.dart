@@ -10,7 +10,7 @@
 // THIS SLICE implements only the state machine plumbing. The vast majority of
 // A_* functions (enemy AI, weapon firing, attacks, sounds) are NOT implemented
 // here — they are registered as no-op stubs that log ONCE the first time they
-// fire, so later waves can replace them without touching the state tables.
+// fire, so they can later be replaced without touching the state tables.
 
 import 'info_tables.dart';
 import 'mobj.dart';
@@ -46,8 +46,8 @@ class ActionRegistry {
 
   /// Register EVERY A_* name referenced by the states[] table as a log-once
   /// no-op stub. Called once at startup so the full vanilla info.c tables run
-  /// without crashing before the combat fan-out wave provides real bodies.
-  /// Fan-out agents call [register] to REPLACE a stub with the real action;
+  /// without crashing before the combat actions provide real bodies.
+  /// Callers use [register] to REPLACE a stub with the real action;
   /// this never overwrites an already-registered (real) implementation.
   void registerAllStubs() {
     for (final String name in allActionNames) {

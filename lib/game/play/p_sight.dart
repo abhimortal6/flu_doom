@@ -1,4 +1,4 @@
-// Line-of-sight / visibility, ported 1:1 from Chocolate Doom src/doom/p_sight.c.
+// Line-of-sight / visibility, ported from Chocolate Doom src/doom/p_sight.c.
 //
 // [Sight.checkSight] is P_CheckSight: a REJECT-matrix fast reject (using the
 // world [Reject] lump) followed by a recursive BSP cross (P_CrossBSPNode /
@@ -10,7 +10,7 @@
 // PTR_SightTraverse path is not modelled (we always run the BSP cross), which
 // matches the released Doom/Doom II behaviour the port targets.
 //
-// Faithfulness is mandatory: this is a port, not a paraphrase.
+// Faithfulness is mandatory: this is a faithful port, not a paraphrase.
 
 import '../../engine/math/fixed.dart';
 import '../world/defs.dart';

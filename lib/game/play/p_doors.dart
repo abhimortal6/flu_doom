@@ -1,11 +1,11 @@
 // Map-interaction thinkers (doors / plats / floors) + the manual-use path,
-// ported 1:1 from Chocolate Doom:
+// ported from Chocolate Doom:
 //   - T_VerticalDoor / EV_VerticalDoor / EV_DoDoor / EV_DoLockedDoor (p_doors.c),
 //   - T_MoveFloor (EV_DoFloor subset) and T_PlatRaise (lift) as moving sectors,
 //   - P_UseLines + PTR_UseTraverse (p_map.c) via the shared P_PathTraverse,
 //   - P_UseSpecialLine (p_switch.c) — the FULL manual-use switch.
 //
-// Faithfulness is mandatory: this is a port, not a paraphrase.
+// Faithfulness is mandatory: this is a faithful port, not a paraphrase.
 // C file-scope globals (usething, etc.) become instance fields here.
 //
 // What is genuinely complete: the manual-door specials (1,26,27,28,31,32,33,34,
@@ -188,7 +188,7 @@ class DoorManager {
   }
 
   // -----------------------------------------------------------------------
-  // T_VerticalDoor (p_doors.c). Ported, incl. door sounds.
+  // T_VerticalDoor (p_doors.c). Ported faithfully, incl. door sounds.
   // -----------------------------------------------------------------------
   void tickDoor(VerticalDoor door) {
     switch (door.direction) {
@@ -337,7 +337,7 @@ class DoorManager {
 
   // -----------------------------------------------------------------------
   // getNextSector / P_FindLowestCeilingSurrounding / P_FindSectorFromLineTag
-  // (p_spec.c). Ported.
+  // (p_spec.c). Ported faithfully.
   // -----------------------------------------------------------------------
   Sector? _getNextSector(Line line, Sector sec) {
     if ((line.flags & mlTwoSided) == 0) return null;

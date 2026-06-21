@@ -1,4 +1,4 @@
-// P_Random / M_Random, ported 1:1 from Chocolate Doom src/doom/m_random.c.
+// P_Random / M_Random, ported from Chocolate Doom src/doom/m_random.c.
 //
 // THE single shared random-number generator for the play simulation. Vanilla
 // Doom's gameplay determinism (demos, identical behaviour) depends on every

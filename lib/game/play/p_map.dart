@@ -21,7 +21,7 @@ import 'p_maputl.dart';
 const fixed_t kMaxRadius = 32 * kFracUnit;
 
 /// Pikup/clip callback: invoked when [thing] touches a pickup [special] mobj.
-/// Pickups are deferred this slice — the hook lets a later wave plug in
+/// Pickups are deferred this slice — the hook lets a later phase plug in
 /// P_TouchSpecialThing without touching collision code.
 typedef SpecialTouch = void Function(Mobj special, Mobj toucher);
 

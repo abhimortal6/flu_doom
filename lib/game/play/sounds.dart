@@ -1,4 +1,4 @@
-// GENERATED 1:1 from reference/chocolate-doom/src/doom/sounds.h by
+// GENERATED from reference/chocolate-doom/src/doom/sounds.h by
 // tool/gen_info.py. sfxenum_t ordinals used by mobjinfo[] sound columns
 // and combat S_StartSound call sites. DO NOT EDIT BY HAND.
 

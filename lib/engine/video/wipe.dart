@@ -1,4 +1,4 @@
-// Screen-melt wipe — a pure Dart port of Chocolate Doom src/doom/f_wipe.c
+// Screen-melt wipe — a faithful Dart port of Chocolate Doom src/doom/f_wipe.c
 // (the MELT wipe: wipe_initMelt / wipe_doMelt / wipe_exitMelt, plus the
 // wipe_StartScreen / wipe_EndScreen screen-capture and the wipe_ScreenWipe
 // driver), operating on the project's 320x200 8-bit indexed framebuffer bytes.
@@ -16,7 +16,7 @@
 //     identical to vanilla.
 //   * The C `wipe_shittyColMajorXform` reorders start/end into column-major to
 //     make doMelt's inner copy sequential; we replicate it exactly so the byte
-//     indexing in doMelt matches the C 1:1.
+//     indexing in doMelt matches the C exactly.
 //   * `wipe_scr` (the live output) stays ROW-MAJOR exactly as vanilla
 //     (I_VideoBuffer); only the start/end source buffers are column-major.
 //   * The melt init uses M_Random (the cosmetic stream — [mRandom]), NOT the
@@ -126,7 +126,7 @@ class WipeMelt {
   }
 
   /// wipe_shittyColMajorXform: transpose [array] (treated as a `width` x `height`
-  /// grid of 2-byte elements) into column-major order in place. 1:1 with the C,
+  /// grid of 2-byte elements) into column-major order in place. Faithful to the C,
   /// with the 2-pixel `dpixel_t` element expressed as a 2-byte stride.
   ///
   ///   dest[x*height + y] = array[y*width + x]   (per 2-byte element)
@@ -150,7 +150,7 @@ class WipeMelt {
   /// Advance the melt by [ticks] tics (default 1, the per-frame tic). Returns
   /// `true` once the melt is complete. After completion this is a no-op that
   /// keeps returning `true`. The live buffer ([compose] source) is updated each
-  /// call. 1:1 with wipe_doMelt.
+  /// call. Faithful to wipe_doMelt.
   bool update([int ticks = 1]) {
     if (_done) return true;
 

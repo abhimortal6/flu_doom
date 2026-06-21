@@ -1,4 +1,4 @@
-// GENERATED 1:1 from reference/chocolate-doom/src/doom/info.c + d_items.c by
+// GENERATED from reference/chocolate-doom/src/doom/info.c + d_items.c by
 // tool/gen_info.py. The full vanilla states[] / mobjinfo[] / weaponinfo[]
 // tables, plus the Mt.* mobjtype ordinals and the DoomEd->type map.
 // DO NOT EDIT BY HAND.

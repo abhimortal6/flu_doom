@@ -1,6 +1,6 @@
-// SoundHook — injectable S_StartSound facade (audio is a later wave).
+// SoundHook — injectable S_StartSound facade (audio is a later phase).
 //
-// Audio is not implemented in the combat wave, but every combat call site that
+// Audio is not implemented in the combat phase, but every combat call site that
 // vanilla Doom sounds at MUST call this hook so wiring real audio later is a
 // one-line swap. Sound ids are the `Sfx.*` ordinals from sounds.dart.
 //
@@ -13,7 +13,7 @@ abstract interface class SoundHook {
 }
 
 /// A no-op [SoundHook]. Constructed by PlaySim until a real audio backend is
-/// wired in a later wave.
+/// wired in a later phase.
 class NullSoundHook implements SoundHook {
   const NullSoundHook();
 

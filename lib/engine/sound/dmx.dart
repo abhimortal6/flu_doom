@@ -108,7 +108,7 @@ class DmxSound {
 
 /// Parse a DMX `DS*` sound lump. Throws [DmxException] on an invalid lump.
 ///
-/// 1:1 with i_sdlsound.c CacheSFX header parsing + pad stripping.
+/// Faithful to i_sdlsound.c CacheSFX header parsing + pad stripping.
 DmxSound decodeDmx(Uint8List data) {
   final int lumplen = data.length;
 
