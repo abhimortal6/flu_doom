@@ -18,7 +18,8 @@
 // [crtScanlines] optionally overlays subtle semi-transparent horizontal
 // scanlines (+ a mild glow) on top of the game view for a retro CRT feel. It is
 // a pure PRESENT-layer overlay — it never touches the framebuffer or the
-// renderer.
+// renderer. [crtIntensity] (0..1) scales BOTH the scanline darkness and the
+// glow strength: 0 = barely there, 1 = strong.
 
 import 'dart:ui' as ui;
 
@@ -48,6 +49,7 @@ class VideoView extends StatelessWidget {
     this.pixelAspectCorrection = false,
     this.filterQuality = FilterQuality.none,
     this.crtScanlines = false,
+    this.crtIntensity = 0.5,
     this.backgroundColor = const Color(0xFF000000),
   });
 
@@ -68,6 +70,10 @@ class VideoView extends StatelessWidget {
   /// Overlay a subtle CRT scanline (+ mild glow) effect on top of the view.
   final bool crtScanlines;
 
+  /// Strength of the CRT overlay (0..1). Scales BOTH the scanline darkness and
+  /// the glow. Only used when [crtScanlines] is true. Clamped to 0..1 at paint.
+  final double crtIntensity;
+
   /// Letterbox fill color.
   final Color backgroundColor;
 
@@ -85,6 +91,7 @@ class VideoView extends StatelessWidget {
                 pixelAspectCorrection: pixelAspectCorrection,
                 filterQuality: filterQuality,
                 crtScanlines: crtScanlines,
+                crtIntensity: crtIntensity,
               ),
             ),
     );
@@ -98,6 +105,7 @@ class _FramebufferPainter extends CustomPainter {
     required this.pixelAspectCorrection,
     required this.filterQuality,
     required this.crtScanlines,
+    required this.crtIntensity,
   });
 
   final ui.Image image;
@@ -105,6 +113,7 @@ class _FramebufferPainter extends CustomPainter {
   final bool pixelAspectCorrection;
   final FilterQuality filterQuality;
   final bool crtScanlines;
+  final double crtIntensity;
 
   @override
   void paint(Canvas canvas, Size size) {
@@ -153,29 +162,47 @@ class _FramebufferPainter extends CustomPainter {
     );
 
     if (crtScanlines) {
-      _paintScanlines(canvas, dest, srcH);
+      _paintScanlines(canvas, dest, srcH, crtIntensity.clamp(0.0, 1.0));
     }
   }
+
+  // Overlay strength at intensity == 1.0. Both alphas scale linearly with
+  // intensity, so intensity 0.5 (the default) reproduces the prior look.
+  static const int _glowAlphaMax = 0x28; // 40/255 additive white glow.
+  static const int _lineAlphaMax = 0x66; // 102/255 black scanline.
 
   /// Subtle retro CRT overlay: semi-transparent horizontal dark scanlines spaced
   /// to track the upscaled pixel rows, plus a faint additive glow that lifts the
   /// midtones so the darkening doesn't just dim the image. Pure present-layer; it
   /// reads nothing from the framebuffer.
-  void _paintScanlines(Canvas canvas, Rect dest, double srcH) {
+  ///
+  /// [intensity] (0..1) scales BOTH the glow and scanline opacity: 0 = barely
+  /// there, 1 = strong. At intensity 0 the overlay is skipped entirely.
+  void _paintScanlines(
+      Canvas canvas, Rect dest, double srcH, double intensity) {
     if (dest.height <= 0 || dest.width <= 0) return;
 
+    final int glowAlpha = (_glowAlphaMax * intensity).round();
+    final int lineAlpha = (_lineAlphaMax * intensity).round();
+    // Nothing visible to draw — avoid the per-row loop cost.
+    if (glowAlpha <= 0 && lineAlpha <= 0) return;
+
     // Mild additive glow to compensate for the scanline darkening.
-    final Paint glow = Paint()
-      ..blendMode = BlendMode.plus
-      ..color = const Color(0x14FFFFFF);
-    canvas.drawRect(dest, glow);
+    if (glowAlpha > 0) {
+      final Paint glow = Paint()
+        ..blendMode = BlendMode.plus
+        ..color = Color.fromARGB(glowAlpha, 0xFF, 0xFF, 0xFF);
+      canvas.drawRect(dest, glow);
+    }
+
+    if (lineAlpha <= 0) return;
 
     // One dark line per upscaled source row (200 rows), but never finer than
     // ~2 device px so it stays visible and cheap.
     final double rowH = dest.height / srcH;
     final double step = rowH < 2.0 ? 2.0 : rowH;
     final double lineThickness = (step * 0.45).clamp(1.0, step);
-    final Paint line = Paint()..color = const Color(0x33000000);
+    final Paint line = Paint()..color = Color.fromARGB(lineAlpha, 0, 0, 0);
     for (double y = dest.top; y < dest.bottom; y += step) {
       canvas.drawRect(
         Rect.fromLTWH(dest.left, y, dest.width, lineThickness),
@@ -190,5 +217,6 @@ class _FramebufferPainter extends CustomPainter {
       old.scaleMode != scaleMode ||
       old.pixelAspectCorrection != pixelAspectCorrection ||
       old.filterQuality != filterQuality ||
-      old.crtScanlines != crtScanlines;
+      old.crtScanlines != crtScanlines ||
+      old.crtIntensity != crtIntensity;
 }

@@ -37,7 +37,11 @@ class GraphicsSettings {
     this.pixelAspectCorrection = true,
     this.scaleMode = ScaleMode.fit,
     this.crtScanlines = false,
+    this.crtIntensity = defaultCrtIntensity,
   });
+
+  /// Default CRT effect strength (0..1) used when the toggle is first enabled.
+  static const double defaultCrtIntensity = 0.5;
 
   /// Upscale filter (SHARP nearest vs SMOOTH bilinear).
   final UpscaleFilter filter;
@@ -51,11 +55,25 @@ class GraphicsSettings {
   /// Optional retro scanline (and mild glow) overlay. OFF by default.
   final bool crtScanlines;
 
+  /// Strength of the CRT scanline + glow overlay, in the range 0.0..1.0.
+  /// 0 = barely visible, 1 = strong. Only applies when [crtScanlines] is on.
+  /// The raw stored value is clamped to [0, 1] on read via [crtIntensityClamped].
+  final double crtIntensity;
+
+  /// [crtIntensity] clamped to the valid 0..1 range (defensive — JSON may carry
+  /// an out-of-range value).
+  double get crtIntensityClamped => crtIntensity.clamp(0.0, 1.0);
+
+  /// The CRT intensity that actually drives the present overlay: the clamped
+  /// slider value when the toggle is on, or 0 (no overlay) when it is off.
+  double get effectiveCrtIntensity => crtScanlines ? crtIntensityClamped : 0.0;
+
   GraphicsSettings copyWith({
     UpscaleFilter? filter,
     bool? pixelAspectCorrection,
     ScaleMode? scaleMode,
     bool? crtScanlines,
+    double? crtIntensity,
   }) {
     return GraphicsSettings(
       filter: filter ?? this.filter,
@@ -63,6 +81,7 @@ class GraphicsSettings {
           pixelAspectCorrection ?? this.pixelAspectCorrection,
       scaleMode: scaleMode ?? this.scaleMode,
       crtScanlines: crtScanlines ?? this.crtScanlines,
+      crtIntensity: crtIntensity ?? this.crtIntensity,
     );
   }
 
@@ -71,6 +90,7 @@ class GraphicsSettings {
         'pixelAspectCorrection': pixelAspectCorrection,
         'scaleMode': scaleMode.name,
         'crtScanlines': crtScanlines,
+        'crtIntensity': crtIntensity,
       };
 
   factory GraphicsSettings.fromJson(Map<String, dynamic> j) {
@@ -85,6 +105,11 @@ class GraphicsSettings {
           .cast<ScaleMode?>()
           .firstWhere((s) => true, orElse: () => ScaleMode.fit)!,
       crtScanlines: j['crtScanlines'] as bool? ?? false,
+      // Backward-compatible: pre-intensity saves omit this key -> default.
+      // Tolerate int or num; clamp to 0..1.
+      crtIntensity:
+          ((j['crtIntensity'] as num?)?.toDouble() ?? defaultCrtIntensity)
+              .clamp(0.0, 1.0),
     );
   }
 
@@ -97,11 +122,17 @@ class GraphicsSettings {
       other.filter == filter &&
       other.pixelAspectCorrection == pixelAspectCorrection &&
       other.scaleMode == scaleMode &&
-      other.crtScanlines == crtScanlines;
+      other.crtScanlines == crtScanlines &&
+      other.crtIntensity == crtIntensity;
 
   @override
-  int get hashCode =>
-      Object.hash(filter, pixelAspectCorrection, scaleMode, crtScanlines);
+  int get hashCode => Object.hash(
+        filter,
+        pixelAspectCorrection,
+        scaleMode,
+        crtScanlines,
+        crtIntensity,
+      );
 }
 
 /// Loads/saves [GraphicsSettings] via shared_preferences.

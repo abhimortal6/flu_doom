@@ -3,7 +3,7 @@
 //   - Upscale filter: SHARP (nearest) vs SMOOTH (bilinear).
 //   - 4:3 pixel-aspect correction on/off.
 //   - Scale mode: fit / integer / fill.
-//   - CRT scanline overlay on/off.
+//   - CRT scanline overlay on/off + intensity (0..1) when on.
 // Persists through a [GraphicsSettingsStore] and live-applies via [onChanged].
 
 import 'package:flutter/material.dart';
@@ -122,6 +122,29 @@ class _GraphicsSettingsScreenState extends State<GraphicsSettingsScreen> {
             ),
             value: _settings.crtScanlines,
             onChanged: (v) => _set(_settings.copyWith(crtScanlines: v)),
+          ),
+          ListTile(
+            enabled: _settings.crtScanlines,
+            title: const Text('CRT intensity'),
+            subtitle: Text(
+              'Strength of the scanlines + glow '
+              '(${(_settings.crtIntensityClamped * 100).round()}%).',
+            ),
+            trailing: SizedBox(
+              width: 200,
+              child: Slider(
+                key: const Key('gfxCrtIntensity'),
+                min: 0.0,
+                max: 1.0,
+                divisions: 20,
+                value: _settings.crtIntensityClamped,
+                label: '${(_settings.crtIntensityClamped * 100).round()}%',
+                // Disabled (greyed) when CRT is off; live-applies + persists.
+                onChanged: _settings.crtScanlines
+                    ? (v) => _set(_settings.copyWith(crtIntensity: v))
+                    : null,
+              ),
+            ),
           ),
           const Padding(
             padding: EdgeInsets.all(16),

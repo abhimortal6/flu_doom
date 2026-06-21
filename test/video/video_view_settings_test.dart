@@ -31,7 +31,11 @@ Future<ui.Image> _image(int w, int h) async {
 /// A Canvas that records image-rect blits and rect fills with their paints.
 class _RecordingCanvas implements Canvas {
   final List<({Rect dst, FilterQuality fq})> blits = [];
-  final List<Rect> rects = [];
+  final List<({Rect rect, int alpha, BlendMode blend})> rectDraws = [];
+
+  // Back-compat accessor for existing assertions (just the rects).
+  List<Rect> get rects =>
+      rectDraws.map((e) => e.rect).toList(growable: false);
 
   @override
   void drawImageRect(ui.Image image, Rect src, Rect dst, Paint paint) {
@@ -39,7 +43,11 @@ class _RecordingCanvas implements Canvas {
   }
 
   @override
-  void drawRect(Rect rect, Paint paint) => rects.add(rect);
+  void drawRect(Rect rect, Paint paint) => rectDraws.add((
+        rect: rect,
+        alpha: (paint.color.a * 255.0).round().clamp(0, 255),
+        blend: paint.blendMode,
+      ));
 
   @override
   void noSuchMethod(Invocation invocation) {}
@@ -137,6 +145,64 @@ void main() {
     );
     expect(crt.blits, hasLength(1)); // still exactly one framebuffer blit
     expect(crt.rects, isNotEmpty, reason: 'scanline + glow overlay rects');
+  });
+
+  // Total "ink" the overlay lays down: sum of alpha over every overlay rect
+  // (scanlines + glow). Higher intensity must mean strictly more ink.
+  int overlayInk(_RecordingCanvas rec) =>
+      rec.rectDraws.fold(0, (sum, e) => sum + e.alpha);
+
+  testWidgets('higher crtIntensity -> stronger overlay (more total alpha ink)',
+      (tester) async {
+    final low = await _capture(
+      tester,
+      (img) => VideoView(image: img, crtScanlines: true, crtIntensity: 0.2),
+    );
+    final high = await _capture(
+      tester,
+      (img) => VideoView(image: img, crtScanlines: true, crtIntensity: 1.0),
+    );
+
+    // Same number of overlay rects (glow + same scanline rows), but the high
+    // setting paints with strictly more alpha -> stronger effect.
+    expect(low.rectDraws, isNotEmpty);
+    expect(high.rectDraws, isNotEmpty);
+    expect(overlayInk(high), greaterThan(overlayInk(low)),
+        reason: 'intensity 1.0 must lay down more ink than 0.2');
+
+    // Both the glow (additive/plus blend) and scanline alphas scale up.
+    final lowGlow = low.rectDraws
+        .firstWhere((e) => e.blend == BlendMode.plus)
+        .alpha;
+    final highGlow = high.rectDraws
+        .firstWhere((e) => e.blend == BlendMode.plus)
+        .alpha;
+    expect(highGlow, greaterThan(lowGlow), reason: 'glow scales with intensity');
+
+    final lowLine = low.rectDraws
+        .firstWhere((e) => e.blend != BlendMode.plus)
+        .alpha;
+    final highLine = high.rectDraws
+        .firstWhere((e) => e.blend != BlendMode.plus)
+        .alpha;
+    expect(highLine, greaterThan(lowLine),
+        reason: 'scanline darkness scales with intensity');
+  });
+
+  testWidgets('crtIntensity 0 with CRT on draws no overlay ink',
+      (tester) async {
+    final zero = await _capture(
+      tester,
+      (img) => VideoView(image: img, crtScanlines: true, crtIntensity: 0.0),
+    );
+    expect(zero.blits, hasLength(1)); // framebuffer still blitted
+    expect(zero.rectDraws, isEmpty,
+        reason: 'intensity 0 => barely-there: overlay skipped entirely');
+  });
+
+  testWidgets('VideoView exposes crtIntensity param', (tester) async {
+    const view = VideoView(image: null, crtScanlines: true, crtIntensity: 0.8);
+    expect(view.crtIntensity, 0.8);
   });
 
   testWidgets('VideoView exposes the present params', (tester) async {
