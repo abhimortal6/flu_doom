@@ -130,18 +130,20 @@ lib/
 
 - **Code** is a port of **Chocolate Doom** (GPLv2) and **Nuked-OPL3**.
   Accordingly, **this project is licensed under the GNU GPL v2**.
-- **Game data** is **Freedoom Phase 1** (`assets/freedoom1.wad`,
+- **Game data** is currently the **shareware `doom1.wad`** (© id Software),
+  bundled (`assets/doom1.wad`) for **original-Doom compatibility testing**. The
+  app boots to the original DOOM title screen and the shareware E1M1.
+- **Freedoom Phase 1** (`assets/freedoom1.wad`,
   [freedoom.github.io](https://freedoom.github.io/)) — a **BSD-licensed**,
   vanilla-compatible drop-in IWAD (ExMy maps, standard texture/sprite/sound/music
-  lump names). It is the only IWAD bundled with the app, so **the app is freely
-  redistributable**. (Freedoom Phase 1 actually has 4 episodes; the in-game menu
-  currently exposes 3 — episode 4 is not yet selectable. Note its E1M1 is a
-  different, larger map than shareware Doom's.)
-- The shareware **`doom1.wad`** (© id Software) is **retained in `assets/` only
-  as a test fixture**: the test suite asserts shareware-Doom-specific map data
-  (E1M1 geometry, the `STARTAN3`/`FLOOR4_8`/`PLAYA1` lumps, player start, etc.),
-  so it loads `doom1.wad` directly from the filesystem via `File(...)`. It is
-  **not** declared as a Flutter asset and is **not** bundled in the app.
+  lump names) the engine loads exactly like `doom1.wad` — **remains available in
+  `assets/`** and can be swapped back to make the app freely redistributable by
+  flipping `kWadAsset` in `lib/game/doom_game.dart` and the bundled asset in
+  `pubspec.yaml`. (Freedoom Phase 1 has 4 episodes; the in-game menu currently
+  exposes 3, and its E1M1 is a different, larger map than shareware Doom's.)
+- The test suite asserts shareware-Doom-specific map data (E1M1 geometry, the
+  `STARTAN3`/`FLOOR4_8`/`PLAYA1` lumps, player start, etc.), loading
+  `doom1.wad` directly from the filesystem via `File('assets/doom1.wad')`.
 - **Dependencies**: `flutter_soloud` (low-latency audio backend) and
   `shared_preferences` (settings persistence) are used under their own licenses.
 - The C reference sources used for the port live in `reference/`,
