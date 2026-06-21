@@ -76,10 +76,19 @@ flutter:
   # the material Icons class.
   uses-material-design: true
 
-  # BRING-YOUR-OWN-WAD: the app intentionally ships NO game data. The user
-  # imports their own Doom-format IWAD at runtime (see lib/ui/wad_import/ and
-  # lib/game/wad_store.dart). assets/*.wad remain on disk for tests + dev but are
-  # deliberately NOT bundled here, so no copyrighted game data ships in the app.
+  # WAD RESOLUTION (asset-first, bring-your-own-WAD fallback):
+  #   * We declare the assets/ DIRECTORY (not a specific file). A directory entry
+  #     bundles whatever files happen to be present at build time and — unlike a
+  #     specific-file entry — does NOT fail the build when an expected file is
+  #     absent. So on a machine where assets/doom1.wad (etc.) exists it gets
+  #     bundled and the app boots straight into the game; on a clean clone with
+  #     only assets/.gitkeep present, nothing problematic is bundled and the
+  #     build still succeeds (the app then shows the import screen).
+  #   * assets/.gitkeep is committed so the directory exists in a fresh clone,
+  #     keeping this directory-asset entry valid. *.wad stays gitignored, so no
+  #     copyrighted game data is committed.
+  assets:
+    - assets/
 
   # To add assets to your application, add an assets section, like this:
   # _example_assets:

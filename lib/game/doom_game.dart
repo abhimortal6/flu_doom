@@ -159,10 +159,43 @@ class _DoomGameState extends State<DoomGame>
     _resolveWadThenBoot();
   }
 
-  /// Resolve the active WAD (bring-your-own-WAD) before booting. If a previously
-  /// imported WAD is stored AND still exists, boot with it; otherwise show the
-  /// import screen. Never crashes — any failure falls back to the import screen.
+  // Bundled-asset WAD candidates, tried in order. A directory asset (`assets/`
+  // in pubspec) bundles whatever is present, so most of these won't exist in a
+  // given build; rootBundle.load throws for an absent asset and we fall through.
+  static const List<String> _assetWadCandidates = <String>[
+    'assets/doom1.wad',
+    'assets/DOOM1.WAD',
+    'assets/doom.wad',
+    'assets/doom2.wad',
+    'assets/freedoom1.wad',
+    'assets/freedoom2.wad',
+  ];
+
+  /// Resolve the active WAD before booting, with this precedence:
+  ///
+  ///   1. A WAD BUNDLED IN assets/ (the user/dev put it there on purpose) — the
+  ///      FIRST candidate that loads + parses as a valid IWAD/PWAD boots the
+  ///      game DIRECTLY, skipping the import screen entirely. A bundled WAD
+  ///      always wins; the import screen is a fallback, not an override.
+  ///   2. ELSE a previously-imported WAD (stored path that still exists on disk).
+  ///   3. ELSE the bring-your-own-WAD import screen.
+  ///
+  /// Never crashes — a corrupt/absent asset just falls through, and any failure
+  /// ultimately falls back to the import screen.
   Future<void> _resolveWadThenBoot() async {
+    // 1. Try a bundled asset WAD first.
+    final Uint8List? assetWad = await _loadBundledWadBytes();
+    if (assetWad != null) {
+      // Open the store best-effort so the in-game "change WAD" button still
+      // works, but a bundled WAD does not need (and is not gated on) it.
+      try {
+        _wadStore = await WadStore.open();
+      } catch (_) {}
+      await _bootWithBytes(assetWad);
+      return;
+    }
+
+    // 2/3. No bundled WAD: fall back to the imported-WAD store / import screen.
     WadStore? store;
     try {
       store = await WadStore.open();
@@ -185,6 +218,28 @@ class _DoomGameState extends State<DoomGame>
     await _boot(path);
   }
 
+  /// Try each bundled-asset WAD candidate in order; return the bytes of the
+  /// first that both loads from the bundle AND parses as a valid IWAD/PWAD.
+  /// Returns null if none are bundled or none parse. Never throws — a missing
+  /// asset (rootBundle.load throws) or a corrupt one falls through to the next.
+  Future<Uint8List?> _loadBundledWadBytes() async {
+    for (final String name in _assetWadCandidates) {
+      try {
+        final ByteData data = await rootBundle.load(name);
+        final Uint8List bytes = data.buffer
+            .asUint8List(data.offsetInBytes, data.lengthInBytes);
+        // Validate by fully parsing the lump directory; a corrupt asset throws
+        // and we move on to the next candidate.
+        WadFile.fromBytes(bytes);
+        debugPrint('[flu_doom] booting from bundled asset WAD: $name');
+        return bytes;
+      } catch (_) {
+        // Asset not bundled or not a valid WAD: try the next candidate.
+      }
+    }
+    return null;
+  }
+
   /// Called by the import screen once a valid WAD has been imported (and its
   /// path persisted). Switches from the import screen to booting the game.
   Future<void> _onWadImported(String wadPath) async {
@@ -197,7 +252,51 @@ class _DoomGameState extends State<DoomGame>
     await _boot(wadPath);
   }
 
+  /// Boot from an imported WAD file at [wadPath]. Reads the bytes (falling back
+  /// to the import screen on read/parse failure) and hands off to [_bootWithWad].
   Future<void> _boot(String wadPath) async {
+    final WadFile wad;
+    try {
+      final Uint8List wadBytes = await File(wadPath).readAsBytes();
+      wad = WadFile.fromBytes(wadBytes);
+    } catch (e) {
+      debugPrint('[flu_doom] stored WAD failed to load ($e); '
+          'returning to import screen');
+      if (mounted) {
+        setState(() {
+          _needsWadImport = true;
+          _ready = false;
+          _error = null;
+        });
+      }
+      return;
+    }
+    await _bootWithWad(wad);
+  }
+
+  /// Boot from already-loaded WAD [bytes] (the bundled-asset path). A parse
+  /// failure here should never happen (we validated in [_loadBundledWadBytes]),
+  /// but if it does we fall back to the import screen rather than crash.
+  Future<void> _bootWithBytes(Uint8List bytes) async {
+    final WadFile wad;
+    try {
+      wad = WadFile.fromBytes(bytes);
+    } catch (e) {
+      debugPrint('[flu_doom] bundled WAD failed to parse at boot ($e); '
+          'returning to import screen');
+      if (mounted) {
+        setState(() {
+          _needsWadImport = true;
+          _ready = false;
+          _error = null;
+        });
+      }
+      return;
+    }
+    await _bootWithWad(wad);
+  }
+
+  Future<void> _bootWithWad(WadFile wad) async {
     try {
       // Load persisted controls settings (overlay + bindings); never throws.
       try {
@@ -218,26 +317,6 @@ class _DoomGameState extends State<DoomGame>
         _gfx = gstore.load();
       } catch (_) {
         // Fall back to defaults if persistence is unavailable.
-      }
-
-      // Bring-your-own-WAD: load the imported IWAD/PWAD from its stored path.
-      // If reading/parsing fails (corrupt / deleted), DON'T crash — fall back to
-      // the import screen so the user can re-import.
-      final WadFile wad;
-      try {
-        final Uint8List wadBytes = await File(wadPath).readAsBytes();
-        wad = WadFile.fromBytes(wadBytes);
-      } catch (e) {
-        debugPrint('[flu_doom] stored WAD failed to load ($e); '
-            'returning to import screen');
-        if (mounted) {
-          setState(() {
-            _needsWadImport = true;
-            _ready = false;
-            _error = null;
-          });
-        }
-        return;
       }
 
       // All 14 PLAYPAL palettes; ST_doPaletteStuff selects one per frame to
