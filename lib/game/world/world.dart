@@ -21,6 +21,7 @@
 import '../../engine/data/textures.dart';
 import '../../engine/math/angle.dart';
 import '../../engine/math/fixed.dart';
+import '../../engine/system/interpolation.dart';
 import '../../engine/wad/wad.dart';
 import 'level.dart';
 import 'ticcmd.dart';
@@ -44,6 +45,25 @@ class Viewpoint {
 
   /// View angle (angle_t / BAM). Vanilla viewangle.
   angle_t angle = 0;
+
+  // --- Frame interpolation (render-only) old-state, Crispy R_InterpolateView ---
+  // These hold the PREVIOUS tic's viewpoint. They are captured by PlaySim at the
+  // start of each tic (before the player moves) and never read by the sim — only
+  // the render path blends old* -> current by the inter-tic fraction.
+  fixed_t oldX = 0;
+  fixed_t oldY = 0;
+  fixed_t oldZ = 0;
+  angle_t oldAngle = 0;
+
+  /// Snapshot the current viewpoint as the interpolation "old" state. Called at
+  /// the START of a tic (old = last tic's value) and by SNAP on a discontinuity
+  /// (teleport / level load) so no lerp smears across the jump.
+  void captureOld() {
+    oldX = x;
+    oldY = y;
+    oldZ = z;
+    oldAngle = angle;
+  }
 
   /// Set the full viewpoint at once.
   void set({
@@ -78,6 +98,11 @@ class World {
 
   /// The renderer's camera. PLAYSIM writes, RENDERER reads.
   final Viewpoint viewpoint = Viewpoint();
+
+  /// Render-only frame-interpolation state (Crispy/Woof smooth motion). The
+  /// integration refreshes its frac/active/enabled each frame; the renderer +
+  /// sprite adapters read [InterpolationState.renderFrac]. Never affects the sim.
+  final InterpolationState interp = InterpolationState();
 
   /// This tic's player command. Input fills it; PLAYSIM consumes it.
   final TicCmd cmd = TicCmd();

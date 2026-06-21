@@ -49,6 +49,7 @@ class GraphicsSettings {
     this.crtScanlines = false,
     this.crtIntensity = defaultCrtIntensity,
     this.aspectMode = AspectMode.widescreen,
+    this.smoothMotion = true,
   });
 
   /// Default CRT effect strength (0..1) used when the toggle is first enabled.
@@ -83,6 +84,13 @@ class GraphicsSettings {
   /// slider value when the toggle is on, or 0 (no overlay) when it is off.
   double get effectiveCrtIntensity => crtScanlines ? crtIntensityClamped : 0.0;
 
+  /// Frame interpolation ("Smooth motion"): decouples visual smoothness from the
+  /// 35Hz sim so motion is fluid at the display refresh rate (Crispy/Woof
+  /// uncapped framerate). RENDER-ONLY — the simulation stays byte-identical.
+  /// Default ON. When OFF the renderer draws the current tic exactly (today's
+  /// behaviour, the render-golden path).
+  final bool smoothMotion;
+
   GraphicsSettings copyWith({
     UpscaleFilter? filter,
     bool? pixelAspectCorrection,
@@ -90,6 +98,7 @@ class GraphicsSettings {
     bool? crtScanlines,
     double? crtIntensity,
     AspectMode? aspectMode,
+    bool? smoothMotion,
   }) {
     return GraphicsSettings(
       filter: filter ?? this.filter,
@@ -99,6 +108,7 @@ class GraphicsSettings {
       crtScanlines: crtScanlines ?? this.crtScanlines,
       crtIntensity: crtIntensity ?? this.crtIntensity,
       aspectMode: aspectMode ?? this.aspectMode,
+      smoothMotion: smoothMotion ?? this.smoothMotion,
     );
   }
 
@@ -109,6 +119,7 @@ class GraphicsSettings {
         'crtScanlines': crtScanlines,
         'crtIntensity': crtIntensity,
         'aspectMode': aspectMode.name,
+        'smoothMotion': smoothMotion,
       };
 
   factory GraphicsSettings.fromJson(Map<String, dynamic> j) {
@@ -133,6 +144,8 @@ class GraphicsSettings {
           .where((a) => a.name == j['aspectMode'])
           .cast<AspectMode?>()
           .firstWhere((a) => true, orElse: () => AspectMode.widescreen)!,
+      // Backward-compatible: pre-interpolation saves omit this key -> ON.
+      smoothMotion: j['smoothMotion'] as bool? ?? true,
     );
   }
 
@@ -147,7 +160,8 @@ class GraphicsSettings {
       other.scaleMode == scaleMode &&
       other.crtScanlines == crtScanlines &&
       other.crtIntensity == crtIntensity &&
-      other.aspectMode == aspectMode;
+      other.aspectMode == aspectMode &&
+      other.smoothMotion == smoothMotion;
 
   @override
   int get hashCode => Object.hash(
@@ -157,6 +171,7 @@ class GraphicsSettings {
         crtScanlines,
         crtIntensity,
         aspectMode,
+        smoothMotion,
       );
 }
 

@@ -18,7 +18,9 @@
 // play-sim [SpriteNum] enum index (mobj.sprite.index), which matches the
 // `spriteNames[]` table 1:1.
 
+import '../../engine/math/fixed.dart';
 import '../../engine/render/sprite_source.dart';
+import '../../engine/system/interpolation.dart';
 import '../../engine/wad/wad.dart';
 import '../play/info.dart';
 import '../play/mobj_flags.dart';
@@ -159,8 +161,21 @@ class PlaySpriteAdapter implements SpriteSource {
   @override
   SpriteResolver get resolver => _resolver;
 
+  // FRAME INTERPOLATION: a jump larger than this (in fixed_t map units) on a
+  // single axis is a teleport / respawn discontinuity — snap (use current) that
+  // frame instead of lerping across it (Crispy's just-teleported guard backstop).
+  static const fixed_t _snapThreshold = 128 * kFracUnit;
+
   @override
   void collect(List<SpriteRequest> out) {
+    // RENDER-ONLY interpolation: blend each mobj's previous tic position toward
+    // its current one by the inter-tic fraction. At renderFrac == FRACUNIT (off /
+    // paused / old==new) every lerp returns the current value -> identical to the
+    // non-interpolated path.
+    final InterpolationState interp = _sim.world.interp;
+    final bool lerp = interp.interpolating;
+    final fixed_t frac = interp.renderFrac;
+
     for (final mobjSprite in _sim.spriteSource.sprites) {
       final mobj = mobjSprite.mobj;
       // Don't draw the player's own mobj (vanilla skips mobj == camera).
@@ -174,10 +189,27 @@ class PlaySpriteAdapter implements SpriteSource {
         flags |= SpriteRequestFlags.shadow;
       }
       final int light = mobjSprite.sector?.lightLevel ?? 255;
+
+      fixed_t px = mobj.x;
+      fixed_t py = mobj.y;
+      fixed_t pz = mobj.z;
+      if (lerp && mobj.interpInit) {
+        // Snap any axis that jumped a long way (teleport) — no smear.
+        final bool snap =
+            (toInt32(mobj.x - mobj.oldX)).abs() > _snapThreshold ||
+                (toInt32(mobj.y - mobj.oldY)).abs() > _snapThreshold ||
+                (toInt32(mobj.z - mobj.oldZ)).abs() > _snapThreshold;
+        if (!snap) {
+          px = lerpFixed(mobj.oldX, mobj.x, frac);
+          py = lerpFixed(mobj.oldY, mobj.y, frac);
+          pz = lerpFixed(mobj.oldZ, mobj.z, frac);
+        }
+      }
+
       out.add(SpriteRequest(
-        x: mobj.x,
-        y: mobj.y,
-        z: mobj.z,
+        x: px,
+        y: py,
+        z: pz,
         angle: mobj.angle,
         spriteNum: mobj.sprite.index,
         frame: baseFrame,

@@ -133,6 +133,19 @@ class _GraphicsSettingsScreenState extends State<GraphicsSettingsScreen> {
             ),
           ),
           const Divider(),
+          const _SectionHeader('Motion'),
+          SwitchListTile(
+            key: const Key('gfxSmoothMotion'),
+            title: const Text('Smooth motion'),
+            subtitle: const Text(
+              'Interpolates the view, sprites and moving doors/lifts between the '
+              "35Hz game tics so motion is fluid at your display's refresh rate. "
+              'Render-only — the game logic is unchanged. On by default.',
+            ),
+            value: _settings.smoothMotion,
+            onChanged: (v) => _set(_settings.copyWith(smoothMotion: v)),
+          ),
+          const Divider(),
           const _SectionHeader('Retro'),
           SwitchListTile(
             key: const Key('gfxCrt'),

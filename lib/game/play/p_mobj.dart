@@ -99,6 +99,10 @@ class MobjSim {
       mobj.z = z;
     }
 
+    // FRAME INTERPOLATION snap: a freshly spawned mobj has no previous tic, so
+    // old == current (no lerp in from a stale/zero position on its first frame).
+    mobj.captureOld();
+
     mobj.thinkFn = mobjThinker;
     thinkers.add(mobj);
     return mobj;

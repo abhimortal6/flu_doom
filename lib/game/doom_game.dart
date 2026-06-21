@@ -432,6 +432,22 @@ class _DoomGameState extends State<DoomGame>
     final GameState? gs = _gs;
     if (gs == null) return;
 
+    // FRAME INTERPOLATION (render-only): expose the inter-tic fraction + whether
+    // the sim is advancing to the render path. `active` mirrors the same
+    // activePlay gate _onTic uses (the sim is frozen on menu/pause/title), so the
+    // interpolated view freezes too instead of jittering between identical tics.
+    final PlaySim? sim = _sim;
+    if (sim != null) {
+      final bool activePlay = gs.gamestate == GameStateType.level &&
+          !gs.paused &&
+          !gs.menu.active &&
+          _wipe == null;
+      sim.world.interp
+        ..enabled = _gfx.smoothMotion
+        ..active = activePlay
+        ..frac = _loop?.subTicFrac16 ?? 0;
+    }
+
     // --- Screen-melt wipe driver (D_Display + D_RunFrame logic) ---
     final WipeMelt? wipe = _wipe;
     if (wipe != null) {

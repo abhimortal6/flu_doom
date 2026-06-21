@@ -11,8 +11,10 @@
 // resolve through the identical R_InitSprites path. psprites always draw
 // rotation 0 (vanilla lump[0]).
 
+import '../../engine/math/fixed.dart';
 import '../../engine/render/psprite_source.dart';
 import '../../engine/render/sprite_source.dart';
+import '../../engine/system/interpolation.dart';
 import '../play/info.dart';
 import '../play/info_tables.dart';
 import '../play/player.dart';
@@ -50,16 +52,29 @@ class PlayPspriteAdapter implements PspriteSource {
 
   @override
   void collect(List<PspriteRequest> out) {
+    // RENDER-ONLY interpolation: blend the weapon psprite sx/sy between tics so
+    // the bob / raise / lower is smooth. At renderFrac == FRACUNIT this returns
+    // the current sx/sy exactly (no change vs the non-interpolated path).
+    final InterpolationState interp = _sim.world.interp;
+    final bool lerp = interp.interpolating;
+    final fixed_t frac = interp.renderFrac;
+
     // add all active psprites, in slot order (weapon then flash).
     for (final Pspdef psp in _player.psprites) {
       // vanilla: if (psp->state).  stateIndex <= 0 means S_NULL / inactive.
       if (psp.stateIndex <= 0) continue;
       final State st = states[psp.stateIndex];
+      fixed_t sx = psp.sx;
+      fixed_t sy = psp.sy;
+      if (lerp && psp.interpInit) {
+        sx = lerpFixed(psp.oldSx, psp.sx, frac);
+        sy = lerpFixed(psp.oldSy, psp.sy, frac);
+      }
       out.add(PspriteRequest(
         spriteNum: st.sprite.index,
         frame: st.frame & ffFrameMask,
-        sx: psp.sx,
-        sy: psp.sy,
+        sx: sx,
+        sy: sy,
         fullBright: (st.frame & ffFullBright) != 0,
       ));
     }

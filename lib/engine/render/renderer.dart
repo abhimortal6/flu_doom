@@ -16,8 +16,11 @@
 // arrive via a [SpriteSource] (dependency inversion) — an [EmptySpriteSource]
 // renders a valid view with no things.
 
+import '../../game/world/defs.dart';
 import '../../game/world/world.dart';
 import '../math/angle.dart';
+import '../math/fixed.dart';
+import '../system/interpolation.dart';
 import '../video/framebuffer.dart';
 import '../video/palette.dart';
 import 'bsp.dart';
@@ -104,12 +107,45 @@ class Renderer {
     PspriteSource psprites = const EmptyPspriteSource(),
   ]) {
     final vp = world.viewpoint;
+    final InterpolationState interp = world.interp;
+    final bool lerp = interp.interpolating;
+    final fixed_t frac = interp.renderFrac;
+
+    // FRAME INTERPOLATION (Crispy R_InterpolateView): blend the previous tic's
+    // viewpoint toward the current one by the inter-tic fraction. At
+    // renderFrac == FRACUNIT (off / paused / old==new) every lerp returns the
+    // CURRENT value, so R_SetupFrame gets exactly today's camera (golden holds).
+    fixed_t vx = vp.x, vy = vp.y, vz = vp.z;
+    angle_t va = vp.angle;
+    if (lerp) {
+      // Snap on a large view jump (teleport / level load) — no smear.
+      const fixed_t snapThreshold = 128 * kFracUnit;
+      final bool snap =
+          (toInt32(vp.x - vp.oldX)).abs() > snapThreshold ||
+              (toInt32(vp.y - vp.oldY)).abs() > snapThreshold ||
+              (toInt32(vp.z - vp.oldZ)).abs() > snapThreshold;
+      if (!snap) {
+        vx = lerpFixed(vp.oldX, vp.x, frac);
+        vy = lerpFixed(vp.oldY, vp.y, frac);
+        vz = lerpFixed(vp.oldZ, vp.z, frac);
+        va = lerpAngle(vp.oldAngle, vp.angle, frac);
+      }
+    }
+
+    // FRAME INTERPOLATION (Crispy interpolated sector heights): temporarily write
+    // lerp(old, current, frac) into the real floorHeight/ceilingHeight of moving
+    // sectors so the ~30 renderer read sites (segs/bsp/planes) draw the
+    // in-between height. Restored after the frame (see [_restoreSectors]) so the
+    // sim never observes the interpolated value. No-op when not interpolating.
+    final List<Sector>? interpSectors =
+        lerp ? _interpolateSectors(frac) : null;
+
     // R_SetupFrame (vanilla copies extralight = player->extralight).
     _state.setupFrame(
-      x: vp.x,
-      y: vp.y,
-      z: vp.z,
-      angle: normAngle(vp.angle),
+      x: vx,
+      y: vy,
+      z: vz,
+      angle: normAngle(va),
       extraLight: psprites.extraLight,
     );
     _draw.centerY = _state.centerY;
@@ -134,6 +170,58 @@ class Renderer {
 
     _planes.drawPlanes(); // R_DrawPlanes
     _things.drawMasked(sprites, psprites); // R_DrawMasked (+ psprites)
+
+    // R_RestoreInterpolations: put the real (current-tic) sector heights back so
+    // the simulation never observes the interpolated values. Critically, this
+    // does NOT clobber the captured old* heights, so EVERY render frame within
+    // the same tic re-blends from the same (old, current) pair.
+    if (interpSectors != null) _restoreSectors();
+  }
+
+  // FRAME INTERPOLATION sector-height helpers (Crispy R_InterpolateView /
+  // R_RestoreInterpolations). Write lerped heights into the live sector fields
+  // for the duration of one frame; remember the true current heights in a side
+  // table so they can be restored afterward WITHOUT touching the captured old*.
+  static const fixed_t _sectorSnapThreshold = 128 * kFracUnit;
+  final List<Sector> _interpTouched = <Sector>[];
+  final List<fixed_t> _interpSavedFloor = <fixed_t>[];
+  final List<fixed_t> _interpSavedCeil = <fixed_t>[];
+
+  List<Sector> _interpolateSectors(fixed_t frac) {
+    _interpTouched.clear();
+    _interpSavedFloor.clear();
+    _interpSavedCeil.clear();
+    for (final Sector sec in world.level.sectors) {
+      // Only sectors with an active mover have meaningful old heights captured.
+      if (sec.specialData == null) continue;
+      final fixed_t fOld = sec.oldFloorHeight;
+      final fixed_t cOld = sec.oldCeilingHeight;
+      final fixed_t fNew = sec.floorHeight;
+      final fixed_t cNew = sec.ceilingHeight;
+      // Snap on a large jump (no smear); otherwise blend.
+      final bool snap = (toInt32(fNew - fOld)).abs() > _sectorSnapThreshold ||
+          (toInt32(cNew - cOld)).abs() > _sectorSnapThreshold;
+      if (snap) continue;
+      // Save the true current heights, then write the interpolated heights into
+      // the live fields for this frame. old* are left untouched.
+      _interpTouched.add(sec);
+      _interpSavedFloor.add(fNew);
+      _interpSavedCeil.add(cNew);
+      sec.floorHeight = lerpFixed(fOld, fNew, frac);
+      sec.ceilingHeight = lerpFixed(cOld, cNew, frac);
+    }
+    return _interpTouched;
+  }
+
+  void _restoreSectors() {
+    for (int i = 0; i < _interpTouched.length; i++) {
+      final Sector sec = _interpTouched[i];
+      sec.floorHeight = _interpSavedFloor[i];
+      sec.ceilingHeight = _interpSavedCeil[i];
+    }
+    _interpTouched.clear();
+    _interpSavedFloor.clear();
+    _interpSavedCeil.clear();
   }
 
   int _resolveSkyTexture(World world) {

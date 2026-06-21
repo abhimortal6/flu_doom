@@ -45,6 +45,29 @@ class Mobj extends Thinker {
   /// Facing angle (angle_t / BAM).
   angle_t angle = 0;
 
+  // --- Frame interpolation (render-only), Crispy per-mobj oldx/oldy/oldz ---
+  // The PREVIOUS tic's position, captured by the sim at tic start (and set equal
+  // to x/y/z at spawn / teleport so the first frame does not lerp across a
+  // discontinuity). Read ONLY by the render path (sprite adapter); never by the
+  // sim. [interpInit] guards the spawn snap.
+  fixed_t oldX = 0;
+  fixed_t oldY = 0;
+  fixed_t oldZ = 0;
+
+  /// False until the first old-position capture; while false the sprite adapter
+  /// treats old == current (no lerp) so a freshly spawned mobj does not smear in
+  /// from (0,0,0). Set true by [captureOld].
+  bool interpInit = false;
+
+  /// Snapshot the current position as the interpolation "old" state. Called by
+  /// the sim at the start of each tic and on spawn/teleport (snap).
+  void captureOld() {
+    oldX = x;
+    oldY = y;
+    oldZ = z;
+    interpInit = true;
+  }
+
   // --- Sector / blockmap intrusive links ---
   /// Next thing in the same sector's thinglist (vanilla `snext`). Intrusive.
   Mobj? sNext;

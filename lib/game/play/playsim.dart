@@ -25,7 +25,7 @@ import '../../engine/math/fixed.dart';
 import 'package:flutter/foundation.dart' show debugPrint;
 
 import '../../input_actions/action_dispatcher.dart' show kTouchInputDebugLog;
-import '../world/defs.dart' show Line;
+import '../world/defs.dart' show Line, Sector;
 import '../world/ticcmd.dart';
 import '../world/world.dart';
 import 'actions.dart';
@@ -249,6 +249,10 @@ class PlaySim {
     // 4) Prime the viewpoint from the player so the renderer has a camera.
     playerSim.calcHeight(player);
     _writeViewpoint();
+
+    // SNAP frame-interpolation old-state to the freshly spawned positions so the
+    // first frame does not lerp in from stale/zero values (level start).
+    snapInterpolation();
   }
 
   /// G_DoLoadLevel: load [mapName] into the shared [World], rebuild every
@@ -320,6 +324,7 @@ class PlaySim {
     // the restored readyWeapon rather than the reborn pistol).
     pspr.setupPsprites(player);
     _writeViewpoint();
+    snapInterpolation(); // no lerp across the map change
   }
 
   /// G_InitNew + G_DoLoadLevel (g_game.c): start a BRAND-NEW game on
@@ -370,6 +375,7 @@ class PlaySim {
     _buildSubsystems();
     spawnLevel();
     _writeViewpoint();
+    snapInterpolation(); // fresh game: no lerp across the start
   }
 
   /// G_DoReborn (g_game.c, single-player branch): the player died and requested
@@ -387,6 +393,7 @@ class PlaySim {
     _buildSubsystems();
     spawnLevel();
     _writeViewpoint();
+    snapInterpolation(); // respawn: no lerp across the reload
   }
 
   /// Intermission totals for the CURRENTLY loaded level (vanilla totalkills /
@@ -435,6 +442,13 @@ class PlaySim {
   /// player think, then all thinkers (mobjs + movers + lights), then refresh
   /// the viewpoint.
   void tic([TicCmd? cmd]) {
+    // FRAME INTERPOLATION (render-only): capture the PREVIOUS tic's positions
+    // BEFORE anything in this tic mutates them, so the render path can blend
+    // old -> new by the inter-tic fraction. This reads/writes only the additive
+    // old* fields; it does NOT touch any sim math (the golden + play-sim tests
+    // hold because nothing the sim reads changes here).
+    _captureInterpolationOldState();
+
     final TicCmd source = cmd ?? world.cmd;
     player.cmd.copyFrom(source);
 
@@ -480,6 +494,59 @@ class PlaySim {
 
     levelTime++;
     _writeViewpoint();
+  }
+
+  // -------------------------------------------------------------------------
+  // FRAME INTERPOLATION (Crispy/Woof) — render-only old-state capture + snap.
+  //
+  // Capture runs at the START of every tic, before the tic mutates anything, so
+  // the old* fields hold the PREVIOUS tic's value (the renderer blends old ->
+  // current by the inter-tic fraction). Snap sets old == current across a
+  // discontinuity (level load / new game / reborn / teleport) so no lerp smears.
+  //
+  // NONE of these fields are read by the simulation; they are pure render inputs.
+  // -------------------------------------------------------------------------
+
+  /// Capture the previous tic's positions for interpolation (called at tic start).
+  void _captureInterpolationOldState() {
+    // Viewpoint: written at the END of the previous tic, so its current value IS
+    // the correct "old" for this tic's interpolation.
+    world.viewpoint.captureOld();
+
+    // Every active mobj (player, monsters, missiles, items): old = current pos.
+    for (final Thinker t in thinkers.thinkers) {
+      if (t is Mobj && !t.removed) t.captureOld();
+    }
+
+    // Player weapon psprites: old = current sx/sy.
+    for (final Pspdef psp in player.psprites) {
+      psp.captureOld();
+    }
+
+    // Moving sectors (an active mover sets specialData != null): old = heights.
+    for (final Sector sec in world.level.sectors) {
+      if (sec.specialData != null) {
+        sec.oldFloorHeight = sec.floorHeight;
+        sec.oldCeilingHeight = sec.ceilingHeight;
+      }
+    }
+  }
+
+  /// SNAP all interpolation old-state to the current values (no lerp across a
+  /// discontinuity). Called after spawnLevel / loadLevel / newGame / doReborn so
+  /// the first rendered frame after the jump shows the new positions exactly.
+  void snapInterpolation() {
+    world.viewpoint.captureOld();
+    for (final Thinker t in thinkers.thinkers) {
+      if (t is Mobj && !t.removed) t.captureOld();
+    }
+    for (final Pspdef psp in player.psprites) {
+      psp.captureOld();
+    }
+    for (final Sector sec in world.level.sectors) {
+      sec.oldFloorHeight = sec.floorHeight;
+      sec.oldCeilingHeight = sec.ceilingHeight;
+    }
   }
 
   /// Copy the player mobj's position + view height into world.viewpoint.

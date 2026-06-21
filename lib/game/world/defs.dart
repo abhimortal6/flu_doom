@@ -67,6 +67,16 @@ class Sector {
   /// Ceiling plane height (fixed_t). PLAYSIM mutates (doors/crushers).
   fixed_t ceilingHeight;
 
+  // --- Frame interpolation (render-only), Crispy interpolated sector heights ---
+  // The PREVIOUS tic's plane heights, captured by the sim at the start of each
+  // tic for sectors with an active mover (specialData != null). The render path
+  // temporarily writes lerp(old, current, frac) into [floorHeight]/[ceilingHeight]
+  // around a frame and restores them after, so the ~30 renderer read sites stay
+  // unchanged and the sim never observes the interpolated values. Never read by
+  // the sim.
+  fixed_t oldFloorHeight = 0;
+  fixed_t oldCeilingHeight = 0;
+
   /// Flat number for the floor (index into the flats table; see
   /// engine/data/flats.dart). PLAYSIM may mutate (animated/donut etc).
   int floorPic;

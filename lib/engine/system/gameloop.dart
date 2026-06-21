@@ -60,6 +60,20 @@ class GameLoop {
   /// Most recent measured frames-per-second.
   double get fps => _fps;
 
+  /// Inter-tic fraction in 16.16 fixed-point, clamped to [0, FRACUNIT].
+  ///
+  /// After the per-frame tic loop, [_accumulatorMicros] holds the wall-clock
+  /// time elapsed since the last 35Hz tic (always < kMicrosPerTic). Dividing by
+  /// the tic duration gives the Crispy/Woof `fractionaltic` the renderer uses to
+  /// blend the previous tic's positions toward the current tic's. RENDER-ONLY:
+  /// the simulation is unaffected.
+  int get subTicFrac16 {
+    int f = (_accumulatorMicros << 16) ~/ kMicrosPerTic;
+    if (f < 0) f = 0;
+    if (f > 0x10000) f = 0x10000; // clamp to FRACUNIT
+    return f;
+  }
+
   /// Whether the loop is currently running.
   bool get isRunning => _ticker.isActive;
 

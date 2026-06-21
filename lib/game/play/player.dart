@@ -45,6 +45,21 @@ class Pspdef {
 
   /// Vertical offset (fixed_t). Vanilla `sy`.
   fixed_t sy = 0;
+
+  // --- Frame interpolation (render-only): previous tic's sx/sy ---
+  // Captured by the sim at tic start; the psprite adapter blends old -> current
+  // by the inter-tic fraction so the weapon bob/raise/lower is smooth. Never read
+  // by the sim. [interpInit] guards the first frame (snap, no lerp).
+  fixed_t oldSx = 0;
+  fixed_t oldSy = 0;
+  bool interpInit = false;
+
+  /// Snapshot the current sx/sy as the interpolation "old" state.
+  void captureOld() {
+    oldSx = sx;
+    oldSy = sy;
+    interpInit = true;
+  }
 }
 
 /// Indices into [Player.psprites]: weapon and flash. Vanilla psprnum_t.
