@@ -102,6 +102,121 @@ class _OverlayHoldButtonState extends State<OverlayHoldButton> {
   }
 }
 
+/// A prominent, clearly-labeled WEAPON-SWITCH button (PREV / NEXT). Unlike the
+/// small utility circles, this is a wide pill that shows BOTH an arrow icon and
+/// a readable "WEAPON" / "PREV"/"NEXT" label so the player can immediately tell
+/// what it does on a phone. It fires a single momentary [ActionSink.tapAction]
+/// (clean DoomKey down/up) — exactly what Doom's weapon-cycle keys ('-'/'=')
+/// expect. Honors the overlay scale (via [height]) and [opacity].
+///
+/// It is a sibling of [OverlayHoldButton] (same tap/flash visuals, same
+/// `HitTestBehavior.opaque` so its hit-area wins over the look-drag region when
+/// stacked above it), but bigger and self-describing.
+class OverlayWeaponButton extends StatefulWidget {
+  const OverlayWeaponButton({
+    super.key,
+    required this.action,
+    required this.sink,
+    required this.label,
+    required this.icon,
+    required this.iconLeading,
+    this.height = 56,
+    this.opacity = 0.45,
+  });
+
+  /// Weapon action to fire on tap (prevWeapon / nextWeapon).
+  final GameAction action;
+  final ActionSink sink;
+
+  /// Visible text on the button (e.g. 'PREV', 'NEXT'). Also the semantic label.
+  final String label;
+
+  /// Arrow icon (chevron) shown beside the label.
+  final IconData icon;
+
+  /// When true the icon sits to the LEFT of the label (prev), else to the right.
+  final bool iconLeading;
+
+  /// Pill height; width scales from it. Drives sizing with the overlay scale.
+  final double height;
+  final double opacity;
+
+  @override
+  State<OverlayWeaponButton> createState() => _OverlayWeaponButtonState();
+}
+
+class _OverlayWeaponButtonState extends State<OverlayWeaponButton> {
+  bool _down = false;
+
+  void _press() {
+    widget.sink.tapAction(widget.action);
+    setState(() => _down = true);
+    Future<void>.delayed(const Duration(milliseconds: 120), () {
+      if (mounted) setState(() => _down = false);
+    });
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final double a = widget.opacity.clamp(0.05, 1.0);
+    final double h = widget.height;
+    final double iconSize = h * 0.5;
+    final double fontSize = h * 0.3;
+    final Widget arrow = Icon(
+      widget.icon,
+      color: const Color(0xFFFFFFFF),
+      size: iconSize,
+    );
+    final Widget text = Text(
+      widget.label,
+      style: TextStyle(
+        color: const Color(0xFFFFFFFF),
+        fontSize: fontSize,
+        fontWeight: FontWeight.bold,
+        letterSpacing: 1.0,
+      ),
+    );
+    return Semantics(
+      label: widget.label,
+      button: true,
+      // Drop the inner Text's own semantics node so the button exposes exactly
+      // one node carrying [label] (so find.bySemanticsLabel matches reliably).
+      excludeSemantics: true,
+      child: GestureDetector(
+        behavior: HitTestBehavior.opaque,
+        onTapDown: (_) => _press(),
+        child: Opacity(
+          opacity: a,
+          child: Container(
+            height: h,
+            padding: EdgeInsets.symmetric(horizontal: h * 0.34),
+            alignment: Alignment.center,
+            decoration: BoxDecoration(
+              color: _down ? const Color(0xFFE0A030) : const Color(0xFF202020),
+              borderRadius: BorderRadius.circular(h / 2),
+              border: Border.all(color: const Color(0xFFFFFFFF), width: 2),
+            ),
+            child: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: <Widget>[
+                if (widget.iconLeading) ...<Widget>[
+                  arrow,
+                  SizedBox(width: h * 0.12),
+                  text,
+                ] else ...<Widget>[
+                  text,
+                  SizedBox(width: h * 0.12),
+                  arrow,
+                ],
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
 /// 8-direction movement stick. Drag from center; resolves the touch vector into
 /// up to two simultaneous movement/strafe actions (e.g. forward + strafe-right
 /// for diagonals). Releases all when lifted.

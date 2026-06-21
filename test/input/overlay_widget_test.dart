@@ -58,20 +58,81 @@ void main() {
     expect(events.any((e) => e.data1 == DoomKey.spacebar), isTrue);
   });
 
-  testWidgets('weapon next button emits a tap (down+up) of equals',
+  testWidgets('NEXT weapon button emits a tap (down+up) of equals',
       (tester) async {
     final q = EventQueue();
     await tester.pumpWidget(_host(q, const OverlaySettings()));
 
-    await tester.tap(find.bySemanticsLabel('W+'));
+    final next = find.bySemanticsLabel('NEXT');
+    expect(next, findsOneWidget);
+    await tester.tap(next);
     await tester.pump();
     final events = q.drain();
     expect(events, hasLength(2));
     expect(events[0].type, EventType.keyDown);
     expect(events[0].data1, DoomKey.equals);
     expect(events[1].type, EventType.keyUp);
+    expect(events[1].data1, DoomKey.equals);
     // Let the momentary-flash timer fire so no timer is pending at teardown.
     await tester.pump(const Duration(milliseconds: 200));
+  });
+
+  testWidgets('PREV weapon button emits a tap (down+up) of minus',
+      (tester) async {
+    final q = EventQueue();
+    await tester.pumpWidget(_host(q, const OverlaySettings()));
+
+    final prev = find.bySemanticsLabel('PREV');
+    expect(prev, findsOneWidget);
+    await tester.tap(prev);
+    await tester.pump();
+    final events = q.drain();
+    expect(events, hasLength(2));
+    expect(events[0].type, EventType.keyDown);
+    expect(events[0].data1, DoomKey.minus);
+    expect(events[1].type, EventType.keyUp);
+    expect(events[1].data1, DoomKey.minus);
+    await tester.pump(const Duration(milliseconds: 200));
+  });
+
+  testWidgets(
+      'weapon buttons are present and hittable in portrait, landscape, and '
+      'left-handed; tap on right-side weapon button fires weapon (not look)',
+      (tester) async {
+    // A weapon button stacked above the look region must WIN the touch: the
+    // tap should post the weapon DoomKey and NOT be swallowed as a look-drag
+    // (which would leave the EventQueue empty). We verify both buttons present
+    // and that a tap produces exactly the weapon key edges, across orientations
+    // and handedness.
+    Future<void> check(OverlaySettings s, Size size) async {
+      final q = EventQueue();
+      tester.view.physicalSize = size;
+      tester.view.devicePixelRatio = 1.0;
+      addTearDown(tester.view.resetPhysicalSize);
+      addTearDown(tester.view.resetDevicePixelRatio);
+      await tester.pumpWidget(_host(q, s));
+      await tester.pump();
+
+      expect(find.bySemanticsLabel('PREV'), findsOneWidget);
+      expect(find.bySemanticsLabel('NEXT'), findsOneWidget);
+
+      // Tap NEXT; it must register as the weapon action, not a look-drag.
+      await tester.tap(find.bySemanticsLabel('NEXT'));
+      await tester.pump();
+      final events = q.drain();
+      expect(events, hasLength(2));
+      expect(events[0].type, EventType.keyDown);
+      expect(events[0].data1, DoomKey.equals);
+      expect(events[1].type, EventType.keyUp);
+      await tester.pump(const Duration(milliseconds: 200));
+    }
+
+    await check(const OverlaySettings(), const Size(800, 1400)); // portrait
+    await check(const OverlaySettings(), const Size(1400, 800)); // landscape
+    await check(
+      const OverlaySettings(handed: HandedLayout.left),
+      const Size(1400, 800),
+    ); // left-handed landscape
   });
 
   testWidgets('hidden overlay renders nothing interactive', (tester) async {

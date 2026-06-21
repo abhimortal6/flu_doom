@@ -215,6 +215,7 @@ class _TouchControlsOverlayState extends State<TouchControlsOverlay> {
           final double fireBtn = 84 * scale;
           final double btn = 60 * scale;
           final double smallBtn = 48 * scale;
+          final double weaponBtn = 56 * scale;
           final double gap = 12 * scale;
 
           // ---- LOOK region: the side of the screen WITHOUT the stick. For
@@ -265,28 +266,32 @@ class _TouchControlsOverlayState extends State<TouchControlsOverlay> {
             ],
           );
 
-          // ---- Secondary cluster: weapon switch (taps).
+          // ---- Secondary cluster: weapon switch. Prominent, clearly-LABELED
+          // pill buttons (not bare chevron circles) so they're recognizable and
+          // thumb-reachable on a phone. Each is a momentary tap posting the
+          // prev/next-weapon DoomKey. Sits ABOVE the look region in the Stack
+          // (same as FIRE/USE) so its taps win over the camera drag.
           final Widget secondaryActions = Row(
             mainAxisSize: MainAxisSize.min,
             children: <Widget>[
-              OverlayHoldButton(
+              OverlayWeaponButton(
                 action: GameAction.prevWeapon,
                 sink: widget.sink,
-                label: 'W-',
+                label: 'PREV',
                 icon: Icons.chevron_left,
-                size: smallBtn,
+                iconLeading: true,
+                height: weaponBtn,
                 opacity: op,
-                momentary: true,
               ),
               SizedBox(width: gap),
-              OverlayHoldButton(
+              OverlayWeaponButton(
                 action: GameAction.nextWeapon,
                 sink: widget.sink,
-                label: 'W+',
+                label: 'NEXT',
                 icon: Icons.chevron_right,
-                size: smallBtn,
+                iconLeading: false,
+                height: weaponBtn,
                 opacity: op,
-                momentary: true,
               ),
             ],
           );
