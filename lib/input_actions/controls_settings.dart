@@ -35,7 +35,7 @@ class OverlaySettings {
     this.opacity = 0.45,
     this.scale = 1.0,
     this.handed = HandedLayout.right,
-    this.lookSensitivity = 1.0,
+    this.lookSensitivity = 2.0,
     this.positions = const <String, ButtonPosition>{},
   });
 
@@ -52,8 +52,8 @@ class OverlaySettings {
   final HandedLayout handed;
 
   /// Drag-to-look (camera) sensitivity multiplier applied on top of the base
-  /// look gain (`kLookBaseGain` in analog_input.dart). 1.0 = baseline brisk
-  /// feel; higher turns faster per unit of horizontal drag. UI range 0.5..6.0.
+  /// look gain (`kLookBaseGain` in analog_input.dart). Default 2.0 = brisk
+  /// feel; higher turns faster per unit of horizontal drag. UI range 0.5..8.0.
   /// To change the OVERALL feel for everyone, nudge kLookBaseGain instead — this
   /// slider just scales around that baseline.
   final double lookSensitivity;
@@ -95,7 +95,7 @@ class OverlaySettings {
       visible: j['visible'] as bool? ?? true,
       opacity: (j['opacity'] as num?)?.toDouble() ?? 0.45,
       scale: (j['scale'] as num?)?.toDouble() ?? 1.0,
-      lookSensitivity: (j['lookSensitivity'] as num?)?.toDouble() ?? 1.0,
+      lookSensitivity: (j['lookSensitivity'] as num?)?.toDouble() ?? 2.0,
       handed: HandedLayout.values
           .where((h) => h.name == j['handed'])
           .cast<HandedLayout?>()

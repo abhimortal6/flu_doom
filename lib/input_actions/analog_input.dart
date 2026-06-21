@@ -35,14 +35,15 @@ import 'dart:math' as math;
 ///
 /// Tuning: `angleturn = px * kLookBaseGain * lookSensitivity * 8` (the *8 is
 /// vanilla `angleturn -= mousex*0x8`). A full 360° turn is 0x4000 (16384) of
-/// summed angleturn. With kLookBaseGain = 3.0 at sensitivity 1.0:
-///   * a gentle ~50px/tic drag  -> mousex 150 -> angleturn 1200 (~26°/tic);
-///   * a fast ~120px/tic flick   -> mousex 360 -> angleturn 2880 (~63°/tic),
-///     so a quick flick whips ~90-180° in 2-3 tics (PUBG-like).
+/// summed angleturn. With kLookBaseGain = 6.0 at the default sensitivity 2.0:
+///   * a moderate ~50px/tic swipe -> mousex 600 -> angleturn 4800 (~105°/tic),
+///     so a normal swipe sweeps the view briskly (PUBG-like);
+///   * at the MAX slider (8.0x) -> mousex 2400 -> angleturn 19200/tic, a very
+///     fast ceiling the user can dial back if they want.
 /// This is the ONE knob to nudge if the on-device feel needs more/less: raise
-/// for faster, lower for slower. The slider (lookSensitivity, 0.5x..6x)
-/// multiplies it.
-const double kLookBaseGain = 3.0;
+/// for faster, lower for slower. The slider (lookSensitivity, 0.5x..8x)
+/// multiplies it (default 2.0x).
+const double kLookBaseGain = 6.0;
 
 /// Mutable analog input bag shared between the touch overlay (writer) and the
 /// per-tic key-state bridge (reader). Not threaded; all access is on the UI /
@@ -63,9 +64,9 @@ class AnalogInput {
   /// drag right (turn right / clockwise). Reset each tic by [takeLookDeltaX].
   double lookDeltaX = 0.0;
 
-  /// Look sensitivity multiplier (1.0 = baseline mouse-like feel). Configured
+  /// Look sensitivity multiplier (2.0 = baseline brisk feel). Configured
   /// from [OverlaySettings.lookSensitivity] by the mount layer.
-  double lookSensitivity = 1.0;
+  double lookSensitivity = 2.0;
 
   /// Set the movement stick vector. [fwd] and [side] are normalized in [-1, 1]
   /// (+fwd = forward, +side = strafe right). [running] marks the run tier.
@@ -113,7 +114,7 @@ class AnalogInput {
   ///   `mousex = rawLogicalPx * kLookBaseGain * lookSensitivity`
   /// where [kLookBaseGain] bridges coarse finger-logical-pixels into the
   /// mouse-count-like units vanilla's `mousex` expects (see kLookBaseGain), and
-  /// [lookSensitivity] is the user slider (1.0 = baseline brisk feel). The
+  /// [lookSensitivity] is the user slider (2.0 = default brisk feel). The
   /// builder then applies `angleturn -= mousex * 0x8` exactly as vanilla
   /// mouse-look does.
   ///

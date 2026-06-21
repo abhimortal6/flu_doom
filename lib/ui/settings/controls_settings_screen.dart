@@ -174,12 +174,12 @@ class _OverlaySection extends StatelessWidget {
           title: const Text('Look sensitivity'),
           subtitle: Slider(
             key: const Key('overlayLookSensitivity'),
-            // 0.5x (clearly-too-slow) .. 6x (clearly-too-fast); 1.0x default is
+            // 0.5x (clearly-too-slow) .. 8x (very fast ceiling); 2.0x default is
             // already brisk thanks to kLookBaseGain in analog_input.dart.
             min: 0.5,
-            max: 6.0,
-            divisions: 22,
-            value: settings.lookSensitivity.clamp(0.5, 6.0),
+            max: 8.0,
+            divisions: 30,
+            value: settings.lookSensitivity.clamp(0.5, 8.0),
             label: '${settings.lookSensitivity.toStringAsFixed(2)}x',
             onChanged: (v) =>
                 onChanged(settings.copyWith(lookSensitivity: v)),

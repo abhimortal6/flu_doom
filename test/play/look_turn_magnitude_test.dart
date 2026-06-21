@@ -41,17 +41,34 @@ void main() {
     test('a moderate one-tic swipe (50px @1.0x) is BRISK (angleturn >= ~1000)',
         () {
       final int at = _angleTurnForSwipe(50.0).abs();
-      // px(50) * kLookBaseGain(3) * sens(1) = 150 mousex; *8 = 1200 angleturn.
-      expect(at, 1200);
+      // px(50) * kLookBaseGain(6) * sens(1) = 300 mousex; *8 = 2400 angleturn.
+      expect(at, 2400);
       // Guard against any regression that floors finger-px to a crawl.
       expect(at, greaterThanOrEqualTo(800),
           reason: 'a normal swipe must turn a good chunk per tic, not crawl');
     });
 
-    test('a fast one-tic flick (120px @1.0x) WHIPS (angleturn ~2880, >2000)',
+    test('a moderate swipe at the DEFAULT slider (50px @2.0x) is BRISK (~4800)',
+        () {
+      // The real fresh-install feel: default lookSensitivity is 2.0.
+      // px(50) * kLookBaseGain(6) * sens(2) = 600 mousex; *8 = 4800 angleturn.
+      final int at = _angleTurnForSwipe(50.0, sensitivity: 2.0).abs();
+      expect(at, 4800);
+      expect(at, greaterThan(2000),
+          reason: 'default-sensitivity swipe should be brisk, ~PUBG');
+    });
+
+    test('at the MAX slider (50px @8.0x) it WHIPS very fast (~19200)', () {
+      // px(50) * kLookBaseGain(6) * sens(8) = 2400 mousex; *8 = 19200 angleturn.
+      // A deliberately fast ceiling the user can dial back.
+      final int at = _angleTurnForSwipe(50.0, sensitivity: 8.0).abs();
+      expect(at, 19200);
+    });
+
+    test('a fast one-tic flick (120px @1.0x) WHIPS (angleturn ~5760, >2000)',
         () {
       final int at = _angleTurnForSwipe(120.0).abs();
-      expect(at, 2880); // 120*3*8
+      expect(at, 5760); // 120*6*8
       expect(at, greaterThan(2000),
           reason: 'a fast flick should whip ~60deg+ in one tic');
     });
@@ -63,8 +80,8 @@ void main() {
     });
 
     test('even at the MIN slider (0.5x) a swipe still turns (not zero)', () {
-      // 50 * 3 * 0.5 = 75 mousex; *8 = 600. Slow but clearly non-zero.
-      expect(_angleTurnForSwipe(50.0, sensitivity: 0.5).abs(), 600);
+      // 50 * 6 * 0.5 = 150 mousex; *8 = 1200. Slower but clearly non-zero.
+      expect(_angleTurnForSwipe(50.0, sensitivity: 0.5).abs(), 1200);
     });
 
     test('drag right turns right (negative angleturn, vanilla mousex*8 sign)',
