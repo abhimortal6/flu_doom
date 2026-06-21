@@ -1,13 +1,14 @@
 # Contributing to flu_doom
 
-Thanks for your interest. flu_doom is a **pure-Dart (no FFI) pure Dart port
-of vanilla Doom** (Chocolate Doom + Nuked-OPL3) running as a Flutter app. A few
+Thanks for your interest. flu_doom is a **pure-Dart (no FFI) port of vanilla
+Doom** (Chocolate Doom + Nuked-OPL3) running as a Flutter app. A few
 ground rules keep the port faithful.
 
-## The one rule that matters: transcribe, never paraphrase
+## The one rule that matters: port faithfully, never paraphrase
 
 Every engine module is ported **faithfully** from the C reference (Chocolate
-Doom; Nuked-OPL3 for OPL). When adding or fixing engine code:
+Doom; Nuked-OPL3 for OPL), preserving the original logic and fixed-point math.
+When adding or fixing engine code:
 
 - **Do not paraphrase, restructure, or "clean up" the C.** Paraphrasing has
   repeatedly introduced subtle fixed-point bugs.

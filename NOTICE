@@ -18,14 +18,14 @@ Chocolate Doom
   License : GNU General Public License, version 2 (GPLv2)
   Authors : id Software (original DOOM source); Simon Howard and the
             Chocolate Doom contributors (the conservatively-accurate port that
-            flu_doom ports).
+            flu_doom is derived from).
   URL     : https://github.com/chocolate-doom/chocolate-doom
   Use     : flu_doom's entire game engine — the software renderer (BSP, segs,
             planes, sky, sprites, masked passes), the play simulation
             (mobjs/thinkers, physics, collision, combat, doors/switches,
             line specials), WAD loading, 16.16 fixed-point and BAM-angle math,
             the DMX sound dispatch, and the MUS->MIDI (mus2mid) and GENMIDI
-            paths — is a faithfully, pure Dart port of Chocolate Doom's
+            paths — is a faithful port of Chocolate Doom's
             C into pure Dart. flu_doom is NOT a wrapper around, nor an FFI
             binding to, any native Doom binary; the engine logic is reimplemented
             in Dart. Because it is a derivative of GPLv2 code, flu_doom as a whole
@@ -100,10 +100,10 @@ Flutter SDK / flutter_lints
 REFERENCE SOURCES
 --------------------------------------------------------------------------------
 
-The C reference sources used to perform the port (Chocolate Doom and
+The C reference sources used to produce the port (Chocolate Doom and
 Nuked-OPL3) live under reference/, which is gitignored and is NOT redistributed
 as part of flu_doom. They are retained locally only to keep the Dart port
-faithful, faithfully, to the originals.
+faithful to the originals.
 
 --------------------------------------------------------------------------------
 TRADEMARK

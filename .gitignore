@@ -50,3 +50,6 @@ debug_shots/
 # IWAD at runtime (see the in-app WAD-import screen). Keep all WADs out of git.
 *.wad
 assets/*.wad
+
+# Local development assistant config (not part of the public project).
+CLAUDE.md

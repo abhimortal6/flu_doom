@@ -4,7 +4,7 @@ Stable contract for the **screen-melt wipe** (`f_wipe.c`) and its present-path
 integration. The wipe is the classic Doom effect: on a game-state transition the
 OLD screen melts downward in vertical strips, revealing the NEW screen.
 
-pure Dart port of Chocolate Doom `src/doom/f_wipe.c` (the MELT wipe:
+A faithful port of Chocolate Doom `src/doom/f_wipe.c` (the MELT wipe:
 `wipe_initMelt` / `wipe_doMelt` / `wipe_exitMelt`, plus the `wipe_StartScreen` /
 `wipe_EndScreen` capture and the `wipe_ScreenWipe` driver) and the `D_Display` /
 `D_RunFrame` driving logic in `d_main.c`. Operates on the 320x200 8-bit indexed

@@ -1,11 +1,11 @@
 # flu_doom
 
-**flu_doom** is a from-scratch, **pure-Dart (NO FFI)** pure Dart port of the
+**flu_doom** is a from-scratch, **pure-Dart (NO FFI)** port of the
 vanilla Doom engine, running as a **Flutter app**. The software renderer, play
 simulation (BSP, mobjs/thinkers, physics, collision, combat), WAD loading,
 16.16 fixed-point and BAM-angle math, the DMX sound dispatch, and the full FM
-music path (WAD MUS → MIDI → GENMIDI → Nuked-OPL3 → PCM) are all hand-ported
-**faithfully into Dart** from [Chocolate Doom](https://github.com/chocolate-doom/chocolate-doom)
+music path (WAD MUS → MIDI → GENMIDI → Nuked-OPL3 → PCM) are all faithfully
+ported **into Dart** from [Chocolate Doom](https://github.com/chocolate-doom/chocolate-doom)
 (GPLv2) and [Nuked-OPL3](https://github.com/nukeykt/Nuked-OPL3) (LGPL). There is
 no native Doom binary and no FFI binding — the engine *is* the Dart code.
 
@@ -19,6 +19,19 @@ in Dart (it does not generate any game audio).
 > The engine relies on 32-bit signed integer overflow for fixed-point math. It
 > targets **Dart native (AOT) integer semantics** (macOS / iOS / Android). The
 > **web target is out of scope** (JS doubles break the fixed-point arithmetic).
+
+---
+
+## Development
+
+This project was **designed and implemented entirely by Claude Opus 4.8 using
+[Claude Code](https://claude.com/claude-code)** (Anthropic's agentic CLI). Every
+line of the engine, audio, rendering, mobile controls, and tooling was written
+by the model; the human author directed product decisions and testing.
+
+It was built across a single Claude Code development session spanning roughly
+**2 days of wall-clock time (2026-06-19 to 2026-06-21, ~50 hours)**. That figure
+is wall-clock span, not continuous compute time.
 
 ---
 
@@ -85,11 +98,11 @@ flutter analyze    # lint (flutter_lints)
 | Done | Deferred / TODO |
 |------|------------------|
 | Title screen → main menu → New Game (episode/skill) → first map | Attract **demo loop** (`D_AdvanceDemo` + demo playback ticcmds) |
-| 1:1 software renderer: BSP, walls, flats/planes, sky, sprites, masked passes | **Save / load** (`p_saveg.c`; Load/Save menu items draw but are inert) |
+| Faithful software renderer: BSP, walls, flats/planes, sky, sprites, masked passes | **Save / load** (`p_saveg.c`; Load/Save menu items draw but are inert) |
 | **Widescreen** rendering + **frame interpolation** (smooth motion above 35 Hz) | Walk-over **line specials** (`P_CrossSpecialLine`) |
 | Player move / thrust / view bob / **collision** (no tunnelling) | Unported switch `EV_` bodies (`EV_DoFloor`/`EV_DoPlat`/`EV_DoCeiling`/`EV_BuildStairs`/`EV_DoDonut`/`EV_LightTurnOn`) |
 | Full **combat**: enemy AI + line-of-sight, weapons/psprites, hitscan + missiles, pickups, damage | **Finale end-text** crawl (GS_FINALE state exists; text not rendered) |
-| **Doors / switches / use-specials** (`P_UseLines` 1:1, manual + tagged/remote) | **Boss / keen** special triggers |
+| **Doors / switches / use-specials** (`P_UseLines` faithful port, manual + tagged/remote) | **Boss / keen** special triggers |
 | **Damaging floor sectors** + secret-sector counting | Screen-melt **wipe** on state transitions |
 | **Level flow**: first map → intermission → next with inventory carry-over | True real-time **music streaming** / authored loop points (song is rendered offline to one looped PCM buffer) |
 | Player **death → reborn** + damage/bonus **palette tint** | **Web target** (fixed-point JS int issue) |
@@ -105,8 +118,8 @@ flutter analyze    # lint (flutter_lints)
 
 ## Architecture / module map
 
-The codebase is layered. Lower layers never depend on higher ones; parallel
-agents code against the frozen `CONTRACTS_*.md` interfaces, not each other's
+The codebase is layered. Lower layers never depend on higher ones; modules code
+against the frozen `CONTRACTS_*.md` interface documents, not each other's
 implementations.
 
 ```
@@ -152,7 +165,7 @@ lib/
 | `lib/CONTRACTS_WORLD.md` | Shared world data layer: geometry structs, `Level.load`, `World`/`Viewpoint`, `TicCmd` |
 | `lib/CONTRACTS_RENDER.md` | Software renderer: BSP, segs, planes, things, draw, `SpriteSource` |
 | `lib/CONTRACTS_PLAY.md` | Play simulation: mobj/thinker/player, physics, collision, doors/plats/floors/lights |
-| `lib/CONTRACTS_COMBAT.md` | Combat wave: damage, hitscan/missiles, enemy AI, weapon psprites, pickups |
+| `lib/CONTRACTS_COMBAT.md` | Combat: damage, hitscan/missiles, enemy AI, weapon psprites, pickups |
 | `lib/CONTRACTS_STATE.md` | Game-state machine + UI: `g_game`, status bar, HUD, automap, menu, intermission |
 | `lib/CONTRACTS_INPUT.md` | Input / controls UX: touch overlay, rebindable keyboard, settings persistence |
 | `lib/CONTRACTS_INTERP.md` | Frame interpolation: smoothing motion above the 35 Hz tic |

@@ -129,7 +129,7 @@ params needed; keep it `(fb.width - 320) ~/ 2`. When fb.width==320 the offset is
   the byte length (or accept width/height), and use those instead of the const.
   The start/end byte arrays are `_fb.pixels` copies, so width = bytes.length ~/
   kScreenHeight (height is always 200). Make `_shittyColMajorXform`, the `y[]`
-  array, and `doMelt` width-relative. Keep the algorithm 1:1 — only the width
+  array, and `doMelt` width-relative. Keep the algorithm faithful — only the width
   source changes from const to variable.
 
 ---
