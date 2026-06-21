@@ -19,6 +19,7 @@ import 'dart:async';
 import 'dart:io';
 import 'dart:ui' as ui;
 
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
@@ -863,21 +864,25 @@ class _DoomGameState extends State<DoomGame>
                 crtIntensity: _gfx.effectiveCrtIntensity,
               ),
             ),
-            TouchControlsOverlay(
-              sink: _sink,
-              analog: _analog,
-              settings: _overlay,
-              // Context-aware mode: GAMEPLAY only during active level play
-              // (gamestate == level AND no menu up); MENU everywhere else
-              // (title/demoScreen, intermission, finale, or while a menu is
-              // open). Read live from the game-state machine each build; the
-              // per-frame _present() setState rebuilds this when it changes, so
-              // the overlay swaps the stick/look scheme for the menu D-pad nav
-              // cluster (and back) automatically.
-              mode: (_gs?.isActiveLevelPlay ?? false)
-                  ? OverlayMode.gameplay
-                  : OverlayMode.menu,
-            ),
+            // On-screen touch controls (joystick + fire/use + menu D-pad). These
+            // are a MOBILE input surface; on desktop the game is driven by
+            // keyboard + mouse, so the overlay buttons are hidden entirely.
+            if (!_isDesktopPlatform)
+              TouchControlsOverlay(
+                sink: _sink,
+                analog: _analog,
+                settings: _overlay,
+                // Context-aware mode: GAMEPLAY only during active level play
+                // (gamestate == level AND no menu up); MENU everywhere else
+                // (title/demoScreen, intermission, finale, or while a menu is
+                // open). Read live from the game-state machine each build; the
+                // per-frame _present() setState rebuilds this when it changes, so
+                // the overlay swaps the stick/look scheme for the menu D-pad nav
+                // cluster (and back) automatically.
+                mode: (_gs?.isActiveLevelPlay ?? false)
+                    ? OverlayMode.gameplay
+                    : OverlayMode.menu,
+              ),
             if (_showDebug)
               DebugOverlay(
                 fps: _loop?.fps ?? 0,
@@ -921,6 +926,23 @@ class _DoomGameState extends State<DoomGame>
         ),
       ),
     );
+  }
+}
+
+/// Whether the app is running on a desktop platform (macOS / Linux / Windows),
+/// where input is keyboard + mouse so the on-screen touch-control overlay is
+/// hidden. Web and mobile (Android / iOS) return false.
+bool get _isDesktopPlatform {
+  if (kIsWeb) return false;
+  switch (defaultTargetPlatform) {
+    case TargetPlatform.macOS:
+    case TargetPlatform.linux:
+    case TargetPlatform.windows:
+      return true;
+    case TargetPlatform.android:
+    case TargetPlatform.iOS:
+    case TargetPlatform.fuchsia:
+      return false;
   }
 }
 
