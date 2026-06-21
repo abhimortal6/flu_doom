@@ -7,8 +7,11 @@ import 'package:flu_doom/engine/video/framebuffer.dart';
 import 'package:flu_doom/engine/video/palette.dart';
 
 void writeFramebufferPng(String path, Framebuffer fb, Palette palette) {
-  final Uint8List rgba = fb.toRgba(palette);
-  final int w = fb.width, h = fb.height;
+  writeRgbaPng(path, fb.toRgba(palette), fb.width, fb.height);
+}
+
+/// Encode an arbitrary RGBA8888 byte buffer (length == w*h*4) to a PNG file.
+void writeRgbaPng(String path, Uint8List rgba, int w, int h) {
   final BytesBuilder raw = BytesBuilder();
   for (int y = 0; y < h; y++) {
     raw.addByte(0);

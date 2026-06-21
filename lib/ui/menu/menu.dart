@@ -177,9 +177,23 @@ class MenuController {
   /// is the integration layer's call (currently just toggles the label).
   bool showMessages = true;
 
-  /// detailLevel (0 = HIGH, 1 = LOW). M_ChangeDetail toggles. STUB: the renderer
-  /// has no low-detail mode, so this only flips the label — see CONTRACTS.
+  /// detailLevel (0 = HIGH, 1 = LOW). M_ChangeDetail toggles.
+  ///
+  /// The 3D renderer has no low-detail (column-doubling) mode — it always draws
+  /// full 320x200 (see CONTRACTS_RENDER.md deviation #2). Rather than leave this
+  /// a dead label, the integration layer maps it to the PRESENT-layer upscale
+  /// filter: HIGH (0) -> SMOOTH (bilinear), LOW (1) -> SHARP (nearest/pixelated).
+  /// Toggling it therefore changes something visible. Fired via [onDetailChanged].
   int detailLevel = 0;
+
+  /// screenSize is wired to the live present-layer "screen size" via
+  /// [onScreenSize] (cosmetic letterboxing of the 320x200 image; the renderer
+  /// stays full-size). 0..8 -> a present inset; see integration. Null = no-op.
+  void Function(int screenSize0to8)? onScreenSize;
+
+  /// Fired when Graphic Detail toggles, with the new detailLevel (0 HIGH/smooth,
+  /// 1 LOW/sharp). Integration maps it to the upscale filter. Null = no-op.
+  void Function(int detailLevel)? onDetailChanged;
 
   // Skull cursor animation (M_SKULL1/2 swap every ~8 tics, vanilla skullAnimCounter).
   int _skullCounter = 0;
@@ -411,15 +425,17 @@ class MenuController {
     onMusicVolume?.call(musicVolume);
   }
 
-  /// M_SizeDisplay: choice 0/1 decrements/increments screenSize (0..8). STUB:
-  /// not wired to R_SetViewSize (the renderer is always full-size), so this only
-  /// moves the thermometer — see CONTRACTS_STATE.md.
+  /// M_SizeDisplay: choice 0/1 decrements/increments screenSize (0..8). The
+  /// renderer stays full 320x200; integration maps screenSize to a present-layer
+  /// inset (letterbox) of the displayed image via [onScreenSize], so shrinking it
+  /// is visible without touching the render math — see CONTRACTS_STATE.md.
   void _sizeDisplay(int choice) {
     if (choice == 0) {
       if (screenSize > 0) screenSize--;
     } else {
       if (screenSize < 8) screenSize++;
     }
+    onScreenSize?.call(screenSize);
   }
 
   /// M_ChangeSensitivity: choice 0/1 decrements/increments mouseSensitivity
@@ -437,10 +453,11 @@ class MenuController {
     showMessages = !showMessages;
   }
 
-  /// M_ChangeDetail: toggle detailLevel HIGH<->LOW. STUB: no low-detail renderer
-  /// path, so only the label changes.
+  /// M_ChangeDetail: toggle detailLevel HIGH<->LOW. Wired to the present-layer
+  /// upscale filter via [onDetailChanged] (HIGH=smooth, LOW=sharp).
   void _changeDetail() {
     detailLevel = 1 - detailLevel;
+    onDetailChanged?.call(detailLevel);
   }
 
   /// M_EndGame -> M_EndGameResponse -> D_StartTitle. Returns to the title/demo

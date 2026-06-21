@@ -37,10 +37,12 @@ import '../input_actions/action_dispatcher.dart';
 import '../input_actions/action_keyboard_listener.dart';
 import '../input_actions/analog_input.dart';
 import '../input_actions/controls_settings.dart';
+import '../input_actions/graphics_settings.dart';
 import '../input_actions/key_bindings.dart';
 import '../ui/controls/touch_controls_overlay.dart';
 import '../ui/debug_overlay.dart';
 import '../ui/settings/controls_settings_screen.dart';
+import '../ui/settings/graphics_settings_screen.dart';
 import 'integration/key_state_bridge.dart';
 import 'integration/player_status_adapter.dart';
 import 'integration/psprite_adapter.dart';
@@ -111,6 +113,13 @@ class _DoomGameState extends State<DoomGame>
 
   KeyBindings _bindings = KeyBindings.defaults();
   OverlaySettings _overlay = const OverlaySettings();
+  GraphicsSettingsStore? _gfxStore;
+  GraphicsSettings _gfx = GraphicsSettings.defaults();
+
+  // In-game Options "Screen Size" (0..8). Wired to a PRESENT-layer inset of the
+  // displayed image (cosmetic letterbox shrink of the 320x200 view) — the 3D
+  // renderer stays full-size and its math is untouched. 8 = full (no inset).
+  int _screenSize = 8;
 
   ui.Image? _frame;
   bool _decodingFrame = false;
@@ -140,6 +149,17 @@ class _DoomGameState extends State<DoomGame>
         _store = store;
         _overlay = store.loadOverlay();
         _bindings = store.loadBindings();
+      } catch (_) {
+        // Fall back to defaults if persistence is unavailable.
+      }
+
+      // Load persisted graphics/video (present-layer) settings; defaults are the
+      // mobile-friendly Smooth + 4:3 aspect, CRT off. Never throws.
+      try {
+        final GraphicsSettingsStore gstore =
+            await GraphicsSettingsStore.open();
+        _gfxStore = gstore;
+        _gfx = gstore.load();
       } catch (_) {
         // Fall back to defaults if persistence is unavailable.
       }
@@ -303,6 +323,23 @@ class _DoomGameState extends State<DoomGame>
         flow.secretExitLevel();
         gs.completeLevel();
       };
+      // In-game Options menu -> present layer. The 3D renderer is untouched.
+      //  * Graphic Detail (M_ChangeDetail): HIGH(0)=Smooth filter, LOW(1)=Sharp.
+      //    Seed the label from the persisted filter so it reflects the real state.
+      //  * Screen Size (M_SizeDisplay): cosmetic letterbox inset of the view.
+      gs.menu.detailLevel =
+          _gfx.filter == UpscaleFilter.smooth ? 0 : 1;
+      gs.menu.screenSize = _screenSize;
+      gs.menu.onDetailChanged = (int detail) {
+        // detail 0 = HIGH -> smooth; 1 = LOW -> sharp.
+        final UpscaleFilter f =
+            detail == 0 ? UpscaleFilter.smooth : UpscaleFilter.sharp;
+        _applyGraphics(_gfx.copyWith(filter: f));
+      };
+      gs.menu.onScreenSize = (int size) {
+        setState(() => _screenSize = size);
+      };
+
       // D_StartTitle: boot to the TITLE SCREEN (GS_DEMOSCREEN / TITLEPIC), NOT
       // straight into a level. The GameState machine already defaults to
       // GameStateType.demoScreen; pressing any key / Esc opens the main menu
@@ -431,6 +468,30 @@ class _DoomGameState extends State<DoomGame>
     _analog.reset();
   }
 
+  /// Apply (and persist) new graphics/present settings live, and keep the
+  /// in-game Options "Graphic Detail" label in sync with the upscale filter.
+  void _applyGraphics(GraphicsSettings g) {
+    setState(() => _gfx = g);
+    unawaited(_gfxStore?.save(g) ?? Future<void>.value());
+    // Keep the menu's detail label consistent (smooth=HIGH, sharp=LOW).
+    _gs?.menu.detailLevel = g.filter == UpscaleFilter.smooth ? 0 : 1;
+  }
+
+  Future<void> _openGraphicsSettings() async {
+    final GraphicsSettingsStore? store = _gfxStore;
+    if (store == null) return;
+    _sink.releaseAll();
+    _analog.reset();
+    await Navigator.of(context).push(MaterialPageRoute<void>(
+      builder: (_) => GraphicsSettingsScreen(
+        store: store,
+        onChanged: (GraphicsSettings g) => _applyGraphics(g),
+      ),
+    ));
+    _sink.releaseAll();
+    _analog.reset();
+  }
+
   Future<void> _openControlsSettings() async {
     final ControlsSettingsStore? store = _store;
     if (store == null) return;
@@ -500,10 +561,21 @@ class _DoomGameState extends State<DoomGame>
         child: Stack(
           fit: StackFit.expand,
           children: <Widget>[
-            VideoView(
-              image: _frame,
-              scaleMode: ScaleMode.fit,
-              pixelAspectCorrection: true,
+            // Present the framebuffer with the live graphics settings. The
+            // "screen size" Options thermometer shrinks the view via a cosmetic
+            // letterbox inset (8 = full; each step below insets ~3% per side),
+            // leaving the renderer full 320x200.
+            Padding(
+              padding: EdgeInsets.all(
+                _screenSize >= 8 ? 0.0 : (8 - _screenSize) * 14.0,
+              ),
+              child: VideoView(
+                image: _frame,
+                scaleMode: _gfx.scaleMode,
+                pixelAspectCorrection: _gfx.pixelAspectCorrection,
+                filterQuality: _gfx.filter.filterQuality,
+                crtScanlines: _gfx.crtScanlines,
+              ),
             ),
             TouchControlsOverlay(
               sink: _sink,
@@ -538,6 +610,11 @@ class _DoomGameState extends State<DoomGame>
                       _MiniButton(
                         label: 'settings',
                         onTap: _openControlsSettings,
+                      ),
+                      const SizedBox(width: 8),
+                      _MiniButton(
+                        label: 'graphics',
+                        onTap: _openGraphicsSettings,
                       ),
                       const SizedBox(width: 8),
                       _MiniButton(
