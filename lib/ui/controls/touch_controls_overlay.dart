@@ -274,11 +274,12 @@ class _TouchControlsOverlayState extends State<TouchControlsOverlay> {
             ],
           );
 
-          // ---- Secondary cluster: weapon switch. Prominent, clearly-LABELED
-          // pill buttons (not bare chevron circles) so they're recognizable and
-          // thumb-reachable on a phone. Each is a momentary tap posting the
-          // prev/next-weapon DoomKey. Sits ABOVE the look region in the Stack
-          // (same as FIRE/USE) so its taps win over the camera drag.
+          // ---- Secondary cluster: weapon switch. COMPACT icon-only chevron
+          // circles (◀ wpn ▶), same size as the small utility buttons — no wide
+          // text pills. Each is a momentary tap posting the prev/next-weapon
+          // DoomKey, which the play-sim resolves into a real weapon change
+          // (cycling to the fist on prev). Sits ABOVE the look region in the
+          // Stack (same as FIRE/USE) so its taps win over the camera drag.
           final Widget secondaryActions = Row(
             mainAxisSize: MainAxisSize.min,
             children: <Widget>[
@@ -287,8 +288,7 @@ class _TouchControlsOverlayState extends State<TouchControlsOverlay> {
                 sink: widget.sink,
                 label: 'PREV',
                 icon: Icons.chevron_left,
-                iconLeading: true,
-                height: weaponBtn,
+                size: weaponBtn,
                 opacity: op,
               ),
               SizedBox(width: gap),
@@ -297,8 +297,7 @@ class _TouchControlsOverlayState extends State<TouchControlsOverlay> {
                 sink: widget.sink,
                 label: 'NEXT',
                 icon: Icons.chevron_right,
-                iconLeading: false,
-                height: weaponBtn,
+                size: weaponBtn,
                 opacity: op,
               ),
             ],

@@ -106,16 +106,17 @@ class _OverlayHoldButtonState extends State<OverlayHoldButton> {
   }
 }
 
-/// A prominent, clearly-labeled WEAPON-SWITCH button (PREV / NEXT). Unlike the
-/// small utility circles, this is a wide pill that shows BOTH an arrow icon and
-/// a readable "WEAPON" / "PREV"/"NEXT" label so the player can immediately tell
-/// what it does on a phone. It fires a single momentary [ActionSink.tapAction]
-/// (clean DoomKey down/up) — exactly what Doom's weapon-cycle keys ('-'/'=')
-/// expect. Honors the overlay scale (via [height]) and [opacity].
+/// A COMPACT weapon-switch button (prev / next). A small icon-only circle the
+/// same size as the other small utility buttons — just a chevron, no wide text
+/// pill — so the weapon controls stay visually minimal. It fires a single
+/// momentary [ActionSink.tapAction] (clean DoomKey down/up), exactly what the
+/// weapon-cycle keys ('-'/'=') expect; the play-sim resolves that into a real
+/// weapon change against the live inventory (reaching the fist on prev-cycle).
 ///
-/// It is a sibling of [OverlayHoldButton] (same tap/flash visuals, same
+/// Honors the overlay scale (via [size]) and [opacity]. Sibling of
+/// [OverlayHoldButton] with identical tap/flash visuals and
 /// `HitTestBehavior.opaque` so its hit-area wins over the look-drag region when
-/// stacked above it), but bigger and self-describing.
+/// stacked above it. [label] is the semantic label only (e.g. 'PREV'/'NEXT').
 class OverlayWeaponButton extends StatefulWidget {
   const OverlayWeaponButton({
     super.key,
@@ -123,8 +124,7 @@ class OverlayWeaponButton extends StatefulWidget {
     required this.sink,
     required this.label,
     required this.icon,
-    required this.iconLeading,
-    this.height = 56,
+    this.size = 42,
     this.opacity = 0.45,
   });
 
@@ -132,17 +132,14 @@ class OverlayWeaponButton extends StatefulWidget {
   final GameAction action;
   final ActionSink sink;
 
-  /// Visible text on the button (e.g. 'PREV', 'NEXT'). Also the semantic label.
+  /// Semantic label (e.g. 'PREV' / 'NEXT'). Not drawn as text.
   final String label;
 
-  /// Arrow icon (chevron) shown beside the label.
+  /// Chevron icon shown in the circle.
   final IconData icon;
 
-  /// When true the icon sits to the LEFT of the label (prev), else to the right.
-  final bool iconLeading;
-
-  /// Pill height; width scales from it. Drives sizing with the overlay scale.
-  final double height;
+  /// Diameter; drives sizing with the overlay scale (same scale as smallBtn).
+  final double size;
   final double opacity;
 
   @override
@@ -167,28 +164,11 @@ class _OverlayWeaponButtonState extends State<OverlayWeaponButton> {
   @override
   Widget build(BuildContext context) {
     final double a = widget.opacity.clamp(0.05, 1.0);
-    final double h = widget.height;
-    final double iconSize = h * 0.5;
-    final double fontSize = h * 0.3;
-    final Widget arrow = Icon(
-      widget.icon,
-      color: const Color(0xFFFFFFFF),
-      size: iconSize,
-    );
-    final Widget text = Text(
-      widget.label,
-      style: TextStyle(
-        color: const Color(0xFFFFFFFF),
-        fontSize: fontSize,
-        fontWeight: FontWeight.bold,
-        letterSpacing: 1.0,
-      ),
-    );
+    final double s = widget.size;
     return Semantics(
       label: widget.label,
       button: true,
-      // Drop the inner Text's own semantics node so the button exposes exactly
-      // one node carrying [label] (so find.bySemanticsLabel matches reliably).
+      // Single semantics node carrying [label] so find.bySemanticsLabel matches.
       excludeSemantics: true,
       child: GestureDetector(
         behavior: HitTestBehavior.opaque,
@@ -196,27 +176,19 @@ class _OverlayWeaponButtonState extends State<OverlayWeaponButton> {
         child: Opacity(
           opacity: a,
           child: Container(
-            height: h,
-            padding: EdgeInsets.symmetric(horizontal: h * 0.34),
+            width: s,
+            height: s,
             alignment: Alignment.center,
             decoration: BoxDecoration(
               color: _down ? const Color(0xFFE0A030) : const Color(0xFF202020),
-              borderRadius: BorderRadius.circular(h / 2),
+              shape: BoxShape.circle,
               border: Border.all(color: const Color(0xFFFFFFFF), width: 2),
             ),
-            child: Row(
-              mainAxisSize: MainAxisSize.min,
-              children: <Widget>[
-                if (widget.iconLeading) ...<Widget>[
-                  arrow,
-                  SizedBox(width: h * 0.12),
-                  text,
-                ] else ...<Widget>[
-                  text,
-                  SizedBox(width: h * 0.12),
-                  arrow,
-                ],
-              ],
+            child: Icon(
+              widget.icon,
+              color: const Color(0xFFFFFFFF),
+              size: s * 0.62,
+              semanticLabel: widget.label,
             ),
           ),
         ),

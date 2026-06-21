@@ -64,7 +64,21 @@ class KeyState {
   bool analogRun = false;
 
   /// Requested weapon slot 1..8, or 0 for "no change".
+  ///
+  /// Vanilla maps the number keys 1..7 directly here (G_BuildTiccmd's
+  /// `key_weapon` block). For touch we additionally support cycling — see
+  /// [prevWeapon]/[nextWeapon] — which the play-sim resolves into this same
+  /// slot before the cmd is built, so the BT_CHANGE path stays single-source.
   int weapon = 0;
+
+  /// Touch-only "previous weapon" request edge for this tic. Vanilla Doom has
+  /// no prev/next mechanic; the play-sim ([PlaySim.buildTiccmd]) resolves this
+  /// against the live inventory into a concrete [weapon] slot, then this is the
+  /// same as a direct 1..7 select. Never read directly by [TicCmdBuilder].
+  bool prevWeapon = false;
+
+  /// Touch-only "next weapon" request edge for this tic. See [prevWeapon].
+  bool nextWeapon = false;
 
   void clear() {
     forward = backward = turnLeft = turnRight = strafeLeft = strafeRight = false;
@@ -74,8 +88,58 @@ class KeyState {
     analogSide = 0;
     analogRun = false;
     weapon = 0;
+    prevWeapon = false;
+    nextWeapon = false;
   }
 }
+
+/// Resolves a touch prev/next-weapon request into a concrete weapon slot, the
+/// faithful source-port approach (Crispy/PrBoom `P_SwitchWeapon`-style scan):
+/// starting from [readyWeapon], step in [dir] (+1 = next, -1 = prev) over the
+/// weapon slots, wrapping, and return the first OWNED & available weapon. This
+/// reaches the fist (cycling prev from pistol) and wraps the full ring.
+///
+/// Faithful availability gates (mirroring P_PlayerThink's BT_CHANGE special
+/// cases, g_game.c / p_user.c):
+///   * super shotgun ([Wp.supershotgun]) is only reachable in commercial
+///     (Doom II) — and only if owned;
+///   * plasma / BFG are never reachable in shareware (matching the BT_CHANGE
+///     guard), even if somehow owned;
+///   * a weapon must be in [weaponOwned] (non-zero) to be selected.
+///
+/// Returns the chosen weapontype_t (0..numWeapons-1), or [readyWeapon]
+/// unchanged if no other owned weapon exists (single-weapon player => no-op).
+int resolveWeaponCycle({
+  required int dir,
+  required int readyWeapon,
+  required List<int> weaponOwned,
+  required bool commercial,
+  required bool shareware,
+}) {
+  const int n = wpNumWeapons;
+  int w = readyWeapon;
+  for (int i = 0; i < n; i++) {
+    w = (w + dir) % n;
+    if (w < 0) w += n;
+    if (weaponOwned[w] == 0) continue;
+    // Super shotgun: Doom II only.
+    if (w == wpSuperShotgun && !commercial) continue;
+    // Plasma / BFG: never in shareware.
+    if ((w == wpPlasma || w == wpBfg) && shareware) continue;
+    return w;
+  }
+  return readyWeapon; // no other owned/available weapon: stay put
+}
+
+// Weapon slot constants mirrored locally so g_build has no dependency on the
+// play-sim's info_tables (keeps the input/ticcmd layer self-contained). These
+// MUST match Wp.* in info_tables.dart.
+const int wpFist = 0;
+const int wpPistol = 1;
+const int wpPlasma = 5;
+const int wpBfg = 6;
+const int wpSuperShotgun = 8;
+const int wpNumWeapons = 9;
 
 /// Builds ticcmds from key state. Holds the small amount of cross-tic state
 /// vanilla keeps (turnheld for acceleration).

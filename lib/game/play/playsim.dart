@@ -22,6 +22,9 @@
 // the dynamic Level fields (per CONTRACTS_WORLD.md).
 
 import '../../engine/math/fixed.dart';
+import 'package:flutter/foundation.dart' show debugPrint;
+
+import '../../input_actions/action_dispatcher.dart' show kTouchInputDebugLog;
 import '../world/defs.dart' show Line;
 import '../world/ticcmd.dart';
 import '../world/world.dart';
@@ -97,6 +100,11 @@ class PlaySim {
   void Function()? onSecretExitLevel;
 
   final TicCmdBuilder _cmdBuilder = TicCmdBuilder();
+
+  /// Edge state for touch weapon cycling: true while a prev/next cycle request
+  /// is being held (the tap min-hold spans ~2-3 tics). We resolve a switch only
+  /// on the rising edge so one tap == one weapon change, never a rapid run.
+  bool _weaponCycleHeld = false;
 
   // -------------------------------------------------------------------------
   // Build (or rebuild, after a level change) every level-dependent subsystem
@@ -388,7 +396,36 @@ class PlaySim {
   int get totalSecret => spawner.totalSecret;
 
   /// G_BuildTiccmd: fill [world.cmd] from the current [keys]. Returns the cmd.
+  ///
+  /// Before building, resolve any touch prev/next-weapon request against the
+  /// live inventory into a concrete weapon slot (vanilla has no cycle mechanic;
+  /// source ports scan weaponowned[] from readyweapon). The resolved slot is
+  /// fed through the SAME [KeyState.weapon] -> BT_CHANGE path the number keys
+  /// use, so 1..7 direct select is unchanged. Edge-triggered: one switch per
+  /// tap, even though the tap min-hold keeps the key down for a few tics.
   TicCmd buildTiccmd(KeyState keys) {
+    final bool cycleReq = keys.prevWeapon || keys.nextWeapon;
+    if (cycleReq && !_weaponCycleHeld && keys.weapon == 0) {
+      final int dir = keys.nextWeapon ? 1 : -1;
+      final GameMode mode = pspr.gameMode;
+      final int target = resolveWeaponCycle(
+        dir: dir,
+        readyWeapon: player.readyWeapon,
+        weaponOwned: player.weaponOwned,
+        commercial: mode == GameMode.commercial,
+        shareware: mode == GameMode.shareware,
+      );
+      if (target != player.readyWeapon) {
+        // KeyState.weapon is 1-based (slot = weapontype + 1); the builder emits
+        // BT_CHANGE | ((slot-1) << BT_WEAPONSHIFT).
+        keys.weapon = target + 1;
+        if (kTouchInputDebugLog) {
+          debugPrint('[touch] weapon cycle ${dir > 0 ? "next" : "prev"} '
+              '${player.readyWeapon} -> $target');
+        }
+      }
+    }
+    _weaponCycleHeld = cycleReq;
     _cmdBuilder.build(world.cmd, keys);
     return world.cmd;
   }

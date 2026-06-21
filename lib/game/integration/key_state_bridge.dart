@@ -51,12 +51,22 @@ class KeyStateBridge {
     _keys.use = down(DoomKey.spacebar);
     _keys.attack = down(DoomKey.rCtrl);
 
-    // Weapon select (1..7); first pressed wins.
+    // Weapon select (1..7); first pressed wins. Vanilla direct select.
     for (int slot = 1; slot <= 7; slot++) {
       if (down(0x30 + slot)) {
         _keys.weapon = slot;
         break;
       }
+    }
+
+    // Touch weapon cycling: carry the prev/next request as flags. The play-sim
+    // ([PlaySim.buildTiccmd]) resolves these against the live inventory into a
+    // concrete weapon slot before the cmd is built. We do NOT resolve here (the
+    // bridge has no player). Direct 1..7 select above takes precedence: if a
+    // number key is also down this tic, leave the cycle flags off.
+    if (_keys.weapon == 0) {
+      _keys.prevWeapon = down(DoomKey.minus);
+      _keys.nextWeapon = down(DoomKey.equals);
     }
 
     // Per-tic confirmation that a momentary tap survived to be sampled. Logs

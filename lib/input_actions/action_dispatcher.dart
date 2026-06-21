@@ -6,16 +6,20 @@
 
 import 'dart:async';
 
-import 'package:flutter/foundation.dart' show debugPrint;
+import 'package:flutter/foundation.dart' show debugPrint, kReleaseMode;
 
 import '../engine/input/event.dart';
 import 'game_action.dart';
 
-/// When true, the action sink prints `[touch]`-tagged lines for taps and the
-/// key edges they post. Read on the phone via `adb logcat | grep '\[touch\]'`.
-/// Always on (these are infrequent, only on discrete button presses) but
-/// compiled out of release if `debugPrint` is a no-op.
-const bool kTouchInputDebugLog = true;
+/// When true, the input layer prints `[touch]`-tagged lines for taps, the key
+/// edges they post, the per-tic sampler, and applied weapon cycles. Read on the
+/// phone via `adb logcat | grep '\[touch\]'`.
+///
+/// Gated on `!kReleaseMode` so it emits in BOTH debug AND **profile** builds
+/// (the integration verifies on-device with a profile build) and is fully
+/// compiled out of release. These logs are infrequent — only on discrete button
+/// presses / weapon-affecting tics — so they do not spam.
+const bool kTouchInputDebugLog = !kReleaseMode;
 
 /// Abstract sink for game actions. The overlay and keyboard layers depend on
 /// this interface, not on [EventQueue] directly, so they can be tested with a
