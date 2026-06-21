@@ -199,8 +199,12 @@ into a `TicCmd` (this layer does not build tic commands).
   (the playsim has not set a viewpoint yet at boot). Pan/zoom/grid/follow via
   AM_Responder. `linesDrawn` exposes the plotted-line count for tests.
 - **Menu** (`menu.dart`): main (M_DOOM) -> episode (M_EPISOD) -> skill (M_SKILL)
-  -> `onNewGame(episode, skill)`. Options menu present with vanilla item
-  graphics; M_SKULL1/2 animated cursor. Arrow/Enter/Esc/Backspace navigation.
+  -> `onNewGame(episode, skill)`. Options (M_OPTTTL) -> Sound Volume (M_SVOL).
+  `MenuItemStatus` mirrors menuitem_t.status (spacer/normal/slider); slider rows
+  draw an M_THERM* thermometer one line below their label (M_DrawThermo) and
+  left/right arrows adjust them (Enter == right-slide). Up/down skip spacer rows.
+  M_SKULL1/2 animated cursor. Arrow/Enter/Esc/Backspace navigation — note left
+  arrow now slides sliders (was previously aliased to Backspace/go-back).
 - **Intermission** (`intermission.dart`): WIMAP0 background, "finished" title,
   Kills/Items/Secrets percentages (WINUM font) counted up, Time/Par MM:SS, then
   waits for a key. **Partial**: the staggered per-stat sound-timed animation and
@@ -211,10 +215,27 @@ into a `TicCmd` (this layer does not build tic commands).
 
 ## 5. Stubbed / partial (and why)
 
-- **Options menu actions** are inert (no-op `onSelect`): sound volume, detail,
-  messages, screen size, mouse sensitivity, save/load are owned by other agents
-  (`lib/ui/settings/`, `lib/ui/controls/`) or systems not yet built. Their item
-  graphics are drawn for layout fidelity.
+- **Options menu** is now FUNCTIONAL (m_menu.c M_Options/M_Sound):
+  - **Sound Volume** (SoundDef): SFX + Music thermometers (0..15), left/right
+    arrows adjust (M_SfxVol/M_MusicVol, Enter == right-slide). They fire
+    `MenuController.onSfxVolume`/`onMusicVolume` (user 0..15), routed by
+    `GameState` through `GameStateConfig.onSfxVolume`/`onMusicVolume` to the
+    integration layer, which calls `SfxSoundHook.setSfxVolume` /
+    `MusicEngine.setMusicVolume`. WORKING — adjusting them changes live audio.
+  - **Messages** (M_ChangeMessages): toggles `MenuController.showMessages`.
+    Functional flag; whether the HUD actually suppresses messages is the
+    integration layer's call (currently only the label/flag flips).
+  - **End Game** (M_EndGame): fires `onEndGame` -> `GameState.enterDemoScreen()`
+    (return to title). Vanilla's confirm message box is skipped (routes straight
+    out).
+  - **STUBS** (navigable + thermometer/label moves, but no system behind them):
+    *Screen Size* (M_SizeDisplay 0..8) — no `R_SetViewSize`, renderer is always
+    full-size; *Mouse Sensitivity* (0..9) — not consumed by the input layer here
+    (owned by `lib/ui/controls/`); *Graphic Detail* (M_ChangeDetail) — no
+    low-detail renderer path, only the label flips. *Save/Load Game* and
+    *Read This!* remain inert (`onSelect == null`) — no savegame/help system.
+  - Volume changes are NOT persisted (no settings store hooked up here) — they
+    reset to the engine default (8/15) on relaunch.
 - **Finale** draws CREDIT as a placeholder background; the scrolling end-text
   and cast call are not implemented (low priority; episode-1 shareware uses a
   text screen).

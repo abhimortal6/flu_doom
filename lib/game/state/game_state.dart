@@ -59,6 +59,9 @@ class GameStateConfig {
     this.statsProvider,
     this.onMusicCue,
     this.onMusicPause,
+    this.onSfxVolume,
+    this.onMusicVolume,
+    this.onEndGame,
   });
 
   /// The merged WAD (for graphics lumps).
@@ -96,6 +99,20 @@ class GameStateConfig {
   /// menu opens or gameplay is paused (and resumed on close/unpause), mirroring
   /// vanilla S_PauseSound / S_ResumeSound. Best-effort; may be null (no music).
   final void Function(bool paused)? onMusicPause;
+
+  /// Called when the Sound Volume menu changes the SFX volume (M_SfxVol ->
+  /// S_SetSfxVolume), with the user-scale value 0..15. Integration wires this to
+  /// SfxSoundHook.setSfxVolume. Best-effort; may be null.
+  final void Function(int volume0to15)? onSfxVolume;
+
+  /// Called when the Sound Volume menu changes the music volume (M_MusicVol ->
+  /// S_SetMusicVolume), with the user-scale value 0..15. Integration wires this
+  /// to MusicEngine.setMusicVolume. Best-effort; may be null.
+  final void Function(int volume0to15)? onMusicVolume;
+
+  /// Called when the Options menu "End Game" item is confirmed (M_EndGame ->
+  /// D_StartTitle): return to the title/demo screen. Best-effort; may be null.
+  final void Function()? onEndGame;
 }
 
 /// The Doom game-state machine.
@@ -110,6 +127,15 @@ class GameState {
     menu.onNewGame = (int ep, int sk) {
       config.onStartNewGame?.call(ep, sk);
       _deferAction(GameAction.newGame);
+    };
+    // Sound Volume menu -> audio engine setters (S_SetSfxVolume /
+    // S_SetMusicVolume), via the injected config callbacks.
+    menu.onSfxVolume = (int v) => config.onSfxVolume?.call(v);
+    menu.onMusicVolume = (int v) => config.onMusicVolume?.call(v);
+    // Options "End Game" -> D_StartTitle (return to the title/demo screen).
+    menu.onEndGame = () {
+      enterDemoScreen();
+      config.onEndGame?.call();
     };
     intermission.onComplete = () => _deferAction(GameAction.worldDone);
   }

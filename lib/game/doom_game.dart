@@ -269,6 +269,21 @@ class _DoomGameState extends State<DoomGame>
             _music?.resume();
           }
         },
+        // Sound Volume menu -> live audio (S_SetSfxVolume / S_SetMusicVolume).
+        // User-scale 0..15; the engines map to their own internal scale.
+        onSfxVolume: (int v) {
+          debugPrint('[flu_doom] menu -> SFX volume $v/15');
+          _sfxHook?.setSfxVolume(v);
+        },
+        onMusicVolume: (int v) {
+          debugPrint('[flu_doom] menu -> music volume $v/15');
+          _music?.setMusicVolume(v);
+        },
+        // Options "End Game" returns to the title screen (GameState already
+        // performs enterDemoScreen(); nothing extra to do here).
+        onEndGame: () {
+          debugPrint('[flu_doom] menu -> End Game (return to title)');
+        },
       ));
 
       // Level-exit hooks (switch special 11 -> normal, 51 -> secret, boss

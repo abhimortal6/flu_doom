@@ -21,9 +21,44 @@ const String _swString =
     'You need to order the entire trilogy.\n\n'
     'Press a key.';
 
-/// A single selectable menu item.
+/// menuitem_t.status (m_menu.c). -1 = spacer (skipped by up/down navigation and
+/// not selectable); 1 = a normal item (Enter activates `onSelect`); 2 = a slider
+/// item (left/right arrows adjust it via `onSlide(choice)`, Enter == right).
+enum MenuItemStatus { spacer, normal, slider }
+
+/// A single selectable menu item (menuitem_t).
 class MenuItem {
-  MenuItem(this.patchName, this.onSelect, {this.altText});
+  MenuItem(
+    this.patchName,
+    this.onSelect, {
+    this.altText,
+    this.status = MenuItemStatus.normal,
+    this.onSlide,
+  });
+
+  /// A status-2 slider item: left/right adjust it via [onSlide], drawn with a
+  /// thermometer. [thermWidth] is the number of cells (M_DrawThermo's
+  /// thermWidth) and [thermDot] returns the current 0..thermWidth-1 dot.
+  MenuItem.slider(
+    this.patchName, {
+    required this.onSlide,
+    required this.thermWidth,
+    required this.thermDot,
+    this.altText,
+  })  : status = MenuItemStatus.slider,
+        onSelect = null;
+
+  /// A spacer row (menuitem_t.status == -1): not navigable, no action. Used by
+  /// the Options/Sound menus where a thermometer occupies the row *below* its
+  /// label.
+  MenuItem.spacer()
+      : patchName = null,
+        altText = null,
+        status = MenuItemStatus.spacer,
+        onSelect = null,
+        onSlide = null,
+        thermWidth = 0,
+        thermDot = null;
 
   /// Lump name of the item's graphic (e.g. "M_NGAME"). May be null for a
   /// text-only / spacer item.
@@ -32,9 +67,23 @@ class MenuItem {
   /// Fallback text drawn with the HUD font if the patch is missing.
   final String? altText;
 
-  /// Invoked when the item is chosen (Enter / right on a selector). Receives
-  /// the controller so it can navigate. Null = inert.
+  /// menuitem_t.status: spacer / normal / slider.
+  final MenuItemStatus status;
+
+  /// Invoked when a normal item is chosen (Enter). Receives the controller so it
+  /// can navigate. Null = inert.
   final void Function(MenuController c)? onSelect;
+
+  /// Invoked for a slider item with the vanilla `choice`: 0 = left (decrement),
+  /// 1 = right (increment). Mirrors M_SfxVol/M_MusicVol/M_SizeDisplay.
+  void Function(MenuController c, int choice)? onSlide;
+
+  /// Slider cell count (M_DrawThermo thermWidth). 0 for non-sliders.
+  int thermWidth = 0;
+
+  /// Returns the current thermometer dot position (0..thermWidth-1) for a
+  /// slider item, or null for non-sliders.
+  int Function()? thermDot;
 }
 
 /// A menu definition (menu_t): a banner, a list of items, a draw origin, and
@@ -104,6 +153,33 @@ class MenuController {
   late MenuDef _episodeMenu;
   late MenuDef _skillMenu;
   late MenuDef _optionsMenu;
+  late MenuDef _soundMenu;
+
+  // --- Options/Sound state (the vanilla globals these menus mutate) ---
+
+  /// sfxVolume (user scale 0..15). M_SfxVol clamps; M_DrawSound thermDot.
+  int sfxVolume = 8;
+
+  /// musicVolume (user scale 0..15). M_MusicVol clamps; M_DrawSound thermDot.
+  int musicVolume = 8;
+
+  /// screenSize (0..8, vanilla screenblocks 3..11). M_SizeDisplay. STUB: not
+  /// wired to a real R_SetViewSize yet (the renderer always draws full size), so
+  /// adjusting this only moves the thermometer — see CONTRACTS_STATE.md.
+  int screenSize = 8;
+
+  /// mouseSensitivity (0..9, M_DrawThermo width 10). STUB: not consumed by the
+  /// input layer here (mouse look is owned by another agent) — purely cosmetic.
+  int mouseSensitivity = 5;
+
+  /// showMessages (M_ChangeMessages toggles 1<->0). Functional flag; the HUD
+  /// message system can read [showMessages] but the wiring to suppress messages
+  /// is the integration layer's call (currently just toggles the label).
+  bool showMessages = true;
+
+  /// detailLevel (0 = HIGH, 1 = LOW). M_ChangeDetail toggles. STUB: the renderer
+  /// has no low-detail mode, so this only flips the label — see CONTRACTS.
+  int detailLevel = 0;
 
   // Skull cursor animation (M_SKULL1/2 swap every ~8 tics, vanilla skullAnimCounter).
   int _skullCounter = 0;
@@ -120,6 +196,20 @@ class MenuController {
 
   /// Callback when "Quit Game" is chosen.
   void Function()? onQuit;
+
+  /// Fired whenever the SFX volume changes (M_SfxVol -> S_SetSfxVolume), with
+  /// the user-scale value 0..15. Integration wires this to
+  /// SfxSoundHook.setSfxVolume. Null = no-op.
+  void Function(int volume0to15)? onSfxVolume;
+
+  /// Fired whenever the music volume changes (M_MusicVol -> S_SetMusicVolume),
+  /// with the user-scale value 0..15. Integration wires this to
+  /// MusicEngine.setMusicVolume. Null = no-op.
+  void Function(int volume0to15)? onMusicVolume;
+
+  /// Fired when "End Game" is confirmed (M_EndGameResponse -> D_StartTitle).
+  /// Integration returns to the title/demo screen. Null = no-op.
+  void Function()? onEndGame;
 
   void _buildMenus() {
     // Skill selection (M_SKILL): 5 difficulties.
@@ -159,19 +249,69 @@ class MenuController {
       ],
     );
 
-    // Options (M_OPTION) — most actions stubbed (owned by another agent).
+    // Sound Volume (SoundDef): SFX + Music thermometers (0..15). Each label sits
+    // on its row with a spacer row below it where M_DrawSound draws the
+    // thermometer (SoundDef.y + LINEHEIGHT*(item+1)). Faithful to SoundMenu[].
+    _soundMenu = MenuDef(
+      name: 'sound',
+      bannerPatch: 'M_SVOL',
+      x: 80,
+      y: 64,
+      items: <MenuItem>[
+        MenuItem.slider(
+          'M_SFXVOL',
+          altText: 'Sound FX Volume',
+          onSlide: (MenuController c, int choice) => c._sfxVol(choice),
+          thermWidth: 16,
+          thermDot: () => sfxVolume,
+        ),
+        MenuItem.spacer(),
+        MenuItem.slider(
+          'M_MUSVOL',
+          altText: 'Music Volume',
+          onSlide: (MenuController c, int choice) => c._musicVol(choice),
+          thermWidth: 16,
+          thermDot: () => musicVolume,
+        ),
+        MenuItem.spacer(),
+      ],
+    );
+
+    // Options (OptionsDef). Faithful to OptionsMenu[]: End Game, Messages,
+    // Detail, Screen Size (slider, spacer below), Mouse Sensitivity (slider,
+    // spacer below), Sound Volume. Spacer rows host the thermometers drawn one
+    // line below their label.
     _optionsMenu = MenuDef(
       name: 'options',
       bannerPatch: 'M_OPTTTL',
       x: 60,
       y: 37,
       items: <MenuItem>[
-        MenuItem('M_ENDGAM', null, altText: 'End Game'),
-        MenuItem('M_MESSG', null, altText: 'Messages: ON'),
-        MenuItem('M_DETAIL', null, altText: 'Graphic Detail: HIGH'),
-        MenuItem('M_SCRNSZ', null, altText: 'Screen Size'),
-        MenuItem('M_MSENS', null, altText: 'Mouse Sensitivity'),
-        MenuItem('M_SVOL', null, altText: 'Sound Volume'),
+        MenuItem('M_ENDGAM', (MenuController c) => c._endGame(),
+            altText: 'End Game'),
+        MenuItem('M_MESSG', (MenuController c) => c._changeMessages(),
+            altText: 'Messages'),
+        MenuItem('M_DETAIL', (MenuController c) => c._changeDetail(),
+            altText: 'Graphic Detail'),
+        MenuItem.slider(
+          'M_SCRNSZ',
+          altText: 'Screen Size',
+          onSlide: (MenuController c, int choice) => c._sizeDisplay(choice),
+          thermWidth: 9,
+          thermDot: () => screenSize,
+        ),
+        MenuItem.spacer(),
+        MenuItem.slider(
+          'M_MSENS',
+          altText: 'Mouse Sensitivity',
+          onSlide: (MenuController c, int choice) =>
+              c._changeSensitivity(choice),
+          thermWidth: 10,
+          thermDot: () => mouseSensitivity,
+        ),
+        MenuItem.spacer(),
+        MenuItem('M_SVOL', (MenuController c) => c._enter(c._soundMenu),
+            altText: 'Sound Volume'),
       ],
     );
 
@@ -196,6 +336,7 @@ class MenuController {
 
     _episodeMenu.parent = _mainMenu;
     _optionsMenu.parent = _mainMenu;
+    _soundMenu.parent = _optionsMenu;
     _skillMenu.parent = _episodeMenu;
     current = _mainMenu;
   }
@@ -214,7 +355,14 @@ class MenuController {
   }
 
   void _enter(MenuDef m) {
+    // Land on the first selectable (non-spacer) item, like vanilla menus whose
+    // first row is always selectable.
     m.selected = 0;
+    while (m.selected < m.items.length &&
+        m.items[m.selected].status == MenuItemStatus.spacer) {
+      m.selected++;
+    }
+    if (m.selected >= m.items.length) m.selected = 0;
     current = m;
   }
 
@@ -237,6 +385,70 @@ class MenuController {
 
   void _quit() {
     onQuit?.call();
+  }
+
+  // --- Options/Sound handlers (m_menu.c) ---
+
+  /// M_SfxVol: choice 0 decrements, 1 increments sfxVolume (clamped 0..15), then
+  /// S_SetSfxVolume(sfxVolume*8) — routed out via [onSfxVolume].
+  void _sfxVol(int choice) {
+    if (choice == 0) {
+      if (sfxVolume > 0) sfxVolume--;
+    } else {
+      if (sfxVolume < 15) sfxVolume++;
+    }
+    onSfxVolume?.call(sfxVolume);
+  }
+
+  /// M_MusicVol: choice 0 decrements, 1 increments musicVolume (clamped 0..15),
+  /// then S_SetMusicVolume — routed out via [onMusicVolume].
+  void _musicVol(int choice) {
+    if (choice == 0) {
+      if (musicVolume > 0) musicVolume--;
+    } else {
+      if (musicVolume < 15) musicVolume++;
+    }
+    onMusicVolume?.call(musicVolume);
+  }
+
+  /// M_SizeDisplay: choice 0/1 decrements/increments screenSize (0..8). STUB:
+  /// not wired to R_SetViewSize (the renderer is always full-size), so this only
+  /// moves the thermometer — see CONTRACTS_STATE.md.
+  void _sizeDisplay(int choice) {
+    if (choice == 0) {
+      if (screenSize > 0) screenSize--;
+    } else {
+      if (screenSize < 8) screenSize++;
+    }
+  }
+
+  /// M_ChangeSensitivity: choice 0/1 decrements/increments mouseSensitivity
+  /// (0..9). STUB: not consumed by the input layer here — cosmetic only.
+  void _changeSensitivity(int choice) {
+    if (choice == 0) {
+      if (mouseSensitivity > 0) mouseSensitivity--;
+    } else {
+      if (mouseSensitivity < 9) mouseSensitivity++;
+    }
+  }
+
+  /// M_ChangeMessages: toggle showMessages on/off.
+  void _changeMessages() {
+    showMessages = !showMessages;
+  }
+
+  /// M_ChangeDetail: toggle detailLevel HIGH<->LOW. STUB: no low-detail renderer
+  /// path, so only the label changes.
+  void _changeDetail() {
+    detailLevel = 1 - detailLevel;
+  }
+
+  /// M_EndGame -> M_EndGameResponse -> D_StartTitle. Returns to the title/demo
+  /// screen and closes the menu. (Vanilla pops a confirm message box first; we
+  /// route straight out — noted in CONTRACTS_STATE.md.)
+  void _endGame() {
+    active = false;
+    onEndGame?.call();
   }
 
   /// Advance the cursor animation one tic (M_Ticker).
@@ -268,16 +480,37 @@ class MenuController {
       case DoomKey.upArrow:
         _moveCursor(-1);
         return true;
-      case DoomKey.enter:
+      case DoomKey.leftArrow:
+        // M_Responder key_menu_left: slide a slider item left (choice 0); other
+        // items ignore it but the key is still consumed.
+        final MenuItem li = m.items[m.selected];
+        if (li.status == MenuItemStatus.slider && li.onSlide != null) {
+          li.onSlide!(this, 0);
+        }
+        return true;
       case DoomKey.rightArrow:
+        // M_Responder key_menu_right: slide a slider item right (choice 1);
+        // other items ignore it (Enter activates them instead).
+        final MenuItem ri = m.items[m.selected];
+        if (ri.status == MenuItemStatus.slider && ri.onSlide != null) {
+          ri.onSlide!(this, 1);
+        }
+        return true;
+      case DoomKey.enter:
+        // M_Responder key_menu_forward: activate. For a slider this is a
+        // right-slide; for a normal item it runs onSelect.
         final MenuItem item = m.items[m.selected];
-        item.onSelect?.call(this);
+        if (item.status == MenuItemStatus.slider && item.onSlide != null) {
+          item.onSlide!(this, 1);
+        } else {
+          item.onSelect?.call(this);
+        }
         return true;
       case DoomKey.escape:
         close();
         return true;
       case DoomKey.backspace:
-      case DoomKey.leftArrow:
+        // M_Responder key_menu_back: go to the previous menu (or close at root).
         if (m.parent != null) {
           current = m.parent!;
         } else {
@@ -292,8 +525,14 @@ class MenuController {
     final MenuDef m = current;
     final int n = m.items.length;
     if (n == 0) return;
-    m.selected = (m.selected + delta) % n;
-    if (m.selected < 0) m.selected += n;
+    // Skip spacer rows (menuitem_t.status == -1), like vanilla's do/while.
+    int next = m.selected;
+    for (int i = 0; i < n; i++) {
+      next = (next + delta) % n;
+      if (next < 0) next += n;
+      if (m.items[next].status != MenuItemStatus.spacer) break;
+    }
+    m.selected = next;
   }
 
   /// Index of the currently highlighted item (for tests / integration).
@@ -325,11 +564,32 @@ class MenuController {
       if (item.patchName != null) {
         _gc.draw(fb, item.patchName!, m.x, iy);
       }
+      // Slider items draw a thermometer one row BELOW the label (M_DrawThermo at
+      // y + LINEHEIGHT*(item+1)), exactly as M_DrawSound / M_DrawOptions.
+      if (item.status == MenuItemStatus.slider && item.thermDot != null) {
+        _drawThermo(fb, m.x, iy + m.lineHeight, item.thermWidth,
+            item.thermDot!().clamp(0, item.thermWidth - 1));
+      }
     }
     // Skull cursor to the left of the selected item (vanilla SKULLXOFF = -32).
     final String skull = _skullFrame == 0 ? 'M_SKULL1' : 'M_SKULL2';
     final int cy = m.y - 5 + m.selected * m.lineHeight;
     _gc.draw(fb, skull, m.x - 32, cy);
+  }
+
+  /// M_DrawThermo (m_menu.c): the volume/size slider. M_THERML left cap, then
+  /// [thermWidth] M_THERMM cells, an M_THERMR right cap, and the M_THERMO dot at
+  /// (x+8) + thermDot*8.
+  void _drawThermo(Framebuffer fb, int x, int y, int thermWidth, int thermDot) {
+    int xx = x;
+    _gc.draw(fb, 'M_THERML', xx, y);
+    xx += 8;
+    for (int i = 0; i < thermWidth; i++) {
+      _gc.draw(fb, 'M_THERMM', xx, y);
+      xx += 8;
+    }
+    _gc.draw(fb, 'M_THERMR', xx, y);
+    _gc.draw(fb, 'M_THERMO', (x + 8) + thermDot * 8, y);
   }
 
   /// M_Drawer message box: centre each '\n'-separated line vertically, using the
