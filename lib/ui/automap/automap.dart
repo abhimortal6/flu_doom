@@ -139,6 +139,15 @@ class Automap {
   /// called [open] first (or [draw] auto-fits if bounds are stale).
   void draw(Framebuffer fb, World world) {
     final Level level = world.level;
+    // Fill the FULL framebuffer width (widescreen-aware); leave the status-bar
+    // band at the bottom. A change in width re-fits so the map fills the screen.
+    final int newViewWidth = fb.width;
+    final int newViewHeight = fb.height - 32;
+    if (newViewWidth != viewWidth || newViewHeight != viewHeight) {
+      viewWidth = newViewWidth;
+      viewHeight = newViewHeight;
+      if (_boundsValid) _fit(level); // re-fit to the new viewport
+    }
     if (!_boundsValid) {
       _computeBounds(level);
       _fit(level);

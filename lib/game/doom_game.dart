@@ -31,6 +31,7 @@ import '../engine/system/gameloop.dart';
 import '../engine/video/framebuffer.dart';
 import '../engine/video/palette.dart';
 import '../engine/video/video_view.dart';
+import '../engine/video/widescreen.dart';
 import '../engine/video/wipe.dart';
 import '../engine/wad/wad.dart';
 import '../input_actions/action_dispatcher.dart';
@@ -70,7 +71,21 @@ class DoomGame extends StatefulWidget {
 class _DoomGameState extends State<DoomGame>
     with SingleTickerProviderStateMixin {
   final EventQueue _events = EventQueue();
-  final Framebuffer _fb = Framebuffer();
+
+  // The indexed framebuffer. Its WIDTH depends on the aspect mode: 320 (4:3) or
+  // a wider true-widescreen width (height always 200). Rebuilt when the aspect
+  // toggles (see [_rebuildRenderer]). Starts 4:3; widescreen is applied in _boot
+  // once the device aspect is known.
+  Framebuffer _fb = Framebuffer();
+  int _renderWidth = kBaseWidth;
+
+  // The 3D renderer, held mutably so the worldView closure renders through the
+  // CURRENT renderer after a width rebuild. Built in _boot, swapped on toggle.
+  Renderer? _renderer;
+  // Sprite adapters captured so a width rebuild can re-create the renderer with
+  // the same sprite sources.
+  PlaySpriteAdapter? _sprites;
+  PlayPspriteAdapter? _psprites;
 
   // Subsystems (assigned during _boot).
   late final EventQueueActionSink _sink = EventQueueActionSink(_events);
@@ -215,15 +230,27 @@ class _DoomGameState extends State<DoomGame>
       simRef = sim;
       sim.spawnLevel();
 
+      // Determine the render width from the aspect mode. Widescreen renders a
+      // WIDER FOV (height stays 200) sized to a 16:9 device by default; the live
+      // device aspect refines it on the first build (see [_maybeRefineWidth]).
+      // 4:3 keeps the vanilla 320.
+      _renderWidth = _gfx.aspectMode == AspectMode.widescreen
+          ? widescreenWidthFor(16 / 9)
+          : kBaseWidth;
+      _fb = Framebuffer(width: _renderWidth);
+
       // Renderer + sprite adapters (world things + player weapon psprites).
       // The renderer reads world.level / sim.* live, so a level change (which
       // swaps world.level + rebuilds sim's subsystems) re-points it with no
-      // re-wiring here.
-      final Renderer renderer = Renderer(framebuffer: _fb, world: sim.world);
+      // re-wiring here. The renderer is held in [_renderer] so a width rebuild
+      // can swap it; the worldView closure renders through the current one.
       final PlaySpriteAdapter sprites = PlaySpriteAdapter(sim, wad);
       // Share the built sprites[] resolver with the psprite adapter.
       final PlayPspriteAdapter psprites =
           PlayPspriteAdapter(sim, sprites.spriteResolver);
+      _sprites = sprites;
+      _psprites = psprites;
+      _renderer = Renderer(framebuffer: _fb, world: sim.world);
 
       // Level-completion flow (g_game.c: G_ExitLevel/G_DoCompleted/...).
       final LevelFlow flow = LevelFlow(
@@ -238,7 +265,7 @@ class _DoomGameState extends State<DoomGame>
         world: sim.world,
         playerStatus: PlayerStatusAdapter(sim.player),
         worldView: (Framebuffer fb) =>
-            renderer.renderPlayerView(sprites, psprites),
+            _renderer?.renderPlayerView(_sprites!, _psprites!),
         // New Game from the menu (M_NewGame -> M_ChooseSkill -> G_DeferedInitNew
         // -> G_InitNew). The menu fires (episode, skill) 0-based; G_InitNew uses
         // a 1-based episode + map 1, then loads E<ep>M1 fresh (falling back to
@@ -471,10 +498,52 @@ class _DoomGameState extends State<DoomGame>
   /// Apply (and persist) new graphics/present settings live, and keep the
   /// in-game Options "Graphic Detail" label in sync with the upscale filter.
   void _applyGraphics(GraphicsSettings g) {
+    final AspectMode prevAspect = _gfx.aspectMode;
     setState(() => _gfx = g);
     unawaited(_gfxStore?.save(g) ?? Future<void>.value());
     // Keep the menu's detail label consistent (smooth=HIGH, sharp=LOW).
     _gs?.menu.detailLevel = g.filter == UpscaleFilter.smooth ? 0 : 1;
+    // Aspect-mode change -> rebuild the framebuffer + renderer at the new width.
+    if (g.aspectMode != prevAspect) {
+      final int width = g.aspectMode == AspectMode.widescreen
+          ? widescreenWidthFor(_deviceAspect())
+          : kBaseWidth;
+      _rebuildRenderer(width);
+    }
+  }
+
+  /// The current device landscape aspect (>= 1.0) used to size the widescreen
+  /// render width. Falls back to 16:9 before the first layout is available.
+  double _deviceAspect() {
+    final Size? size =
+        WidgetsBinding.instance.platformDispatcher.views.isNotEmpty
+            ? WidgetsBinding.instance.platformDispatcher.views.first.physicalSize
+            : null;
+    if (size == null || size.width <= 0 || size.height <= 0) return 16 / 9;
+    return landscapeAspect(size.width, size.height);
+  }
+
+  /// Rebuild the framebuffer + 3D renderer at [width] (height stays 200) and
+  /// re-render a frame. The worldView closure renders through [_renderer], so
+  /// swapping it here re-points the 3D view with no other re-wiring. No-op if
+  /// the width is unchanged.
+  void _rebuildRenderer(int width) {
+    if (width == _renderWidth) return;
+    final PlaySim? sim = _sim;
+    final PlaySpriteAdapter? sprites = _sprites;
+    if (sim == null || sprites == null) return;
+    _renderWidth = width;
+    _fb = Framebuffer(width: width);
+    _renderer = Renderer(framebuffer: _fb, world: sim.world);
+    // A pending wipe references the OLD-width buffer; drop it (the next frame
+    // renders cleanly at the new width).
+    _wipe = null;
+    _wipegamestate = _gs?.gamestate;
+    // Render + present a fresh frame at the new width.
+    if (_gs != null) {
+      _onRender();
+    }
+    if (mounted) setState(() {});
   }
 
   Future<void> _openGraphicsSettings() async {
@@ -553,6 +622,21 @@ class _DoomGameState extends State<DoomGame>
       );
     }
 
+    // Refine the widescreen render width to the ACTUAL device aspect once a
+    // layout is available (boot used a 16:9 default). Runs after the frame so we
+    // don't rebuild mid-build. No-op in 4:3 mode or when the width is unchanged.
+    if (_gfx.aspectMode == AspectMode.widescreen) {
+      final double aspect = _deviceAspect();
+      final int want = widescreenWidthFor(aspect);
+      if (want != _renderWidth) {
+        WidgetsBinding.instance.addPostFrameCallback((_) {
+          if (mounted && _gfx.aspectMode == AspectMode.widescreen) {
+            _rebuildRenderer(want);
+          }
+        });
+      }
+    }
+
     return _LifecycleHandler(
       onPaused: _onAppPaused,
       child: ActionKeyboardListener(
@@ -575,6 +659,7 @@ class _DoomGameState extends State<DoomGame>
                 pixelAspectCorrection: _gfx.pixelAspectCorrection,
                 filterQuality: _gfx.filter.filterQuality,
                 crtScanlines: _gfx.crtScanlines,
+                crtIntensity: _gfx.effectiveCrtIntensity,
               ),
             ),
             TouchControlsOverlay(

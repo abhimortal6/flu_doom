@@ -59,24 +59,27 @@ class Hud {
   /// fullscreen readout (health / ammo) in the corners, as the vanilla
   /// fullscreen HUD does when the status bar is hidden.
   void draw(Framebuffer fb, {PlayerStatus? player, bool fullscreen = false}) {
+    // Centre the 320-wide HUD on a wider (widescreen) framebuffer. 0 at 320.
+    final int ox = (fb.width - kScreenWidth) ~/ 2;
     if (hasMessage) {
-      font.draw(fb, messageX, messageY, _message);
+      font.draw(fb, ox + messageX, messageY, _message);
     }
     if (fullscreen && player != null) {
-      _drawFullscreen(fb, player);
+      _drawFullscreen(fb, player, ox);
     }
   }
 
-  void _drawFullscreen(Framebuffer fb, PlayerStatus p) {
+  void _drawFullscreen(Framebuffer fb, PlayerStatus p, int ox) {
     // Bottom-left: health. Bottom-right: ready ammo. (Doom uses big red
     // numbers here; we render with the HUD font for a dependency-light layout.)
+    // Anchored to the centred 320-wide band so widescreen keeps the corners.
     final int y = kScreenHeight - font.height - 2;
-    font.draw(fb, 2, y, '${p.health}%');
+    font.draw(fb, ox + 2, y, '${p.health}%');
     final AmmoType? at = p.readyWeaponAmmo;
     if (at != null) {
       final String ammoStr = '${p.ammo(at)}';
       final int w = font.widthOf(ammoStr);
-      font.draw(fb, kScreenWidth - w - 2, y, ammoStr);
+      font.draw(fb, ox + kScreenWidth - w - 2, y, ammoStr);
     }
   }
 }

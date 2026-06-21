@@ -22,6 +22,8 @@ void main() {
     expect(g.scaleMode, ScaleMode.fit);
     expect(g.crtScanlines, false);
     expect(g.crtIntensity, 0.5);
+    // True-widescreen rendering is the mobile default.
+    expect(g.aspectMode, AspectMode.widescreen);
     expect(GraphicsSettings.defaultCrtIntensity, 0.5);
     // Toggle off -> overlay effectively disabled regardless of slider value.
     expect(g.effectiveCrtIntensity, 0.0);
@@ -30,17 +32,40 @@ void main() {
     expect(UpscaleFilter.sharp.filterQuality, FilterQuality.none);
   });
 
-  test('JSON round-trip preserves all fields incl. crtIntensity', () {
+  test('JSON round-trip preserves all fields incl. crtIntensity + aspectMode',
+      () {
     const g = GraphicsSettings(
       filter: UpscaleFilter.sharp,
       pixelAspectCorrection: false,
       scaleMode: ScaleMode.integer,
       crtScanlines: true,
       crtIntensity: 0.85,
+      aspectMode: AspectMode.fourThree,
     );
     final back = GraphicsSettings.fromJson(g.toJson());
     expect(back, g);
     expect(back.crtIntensity, 0.85);
+    expect(back.aspectMode, AspectMode.fourThree);
+  });
+
+  test('legacy save without aspectMode key falls back to widescreen', () {
+    final legacy = <String, dynamic>{
+      'filter': 'smooth',
+      'pixelAspectCorrection': true,
+      'scaleMode': 'fit',
+      'crtScanlines': false,
+    };
+    final g = GraphicsSettings.fromJson(legacy);
+    expect(g.aspectMode, AspectMode.widescreen);
+  });
+
+  test('aspectMode round-trips through the store', () async {
+    final store = await GraphicsSettingsStore.open();
+    await store.save(
+      const GraphicsSettings(aspectMode: AspectMode.fourThree),
+    );
+    final store2 = await GraphicsSettingsStore.open();
+    expect(store2.load().aspectMode, AspectMode.fourThree);
   });
 
   test('effectiveCrtIntensity gates on the toggle and clamps', () {

@@ -563,14 +563,16 @@ class MenuController {
       _drawMessage(fb, _message!);
       return;
     }
+    // Centre the 320-wide menu on a wider (widescreen) framebuffer. 0 at 320.
+    final int ox = (fb.width - kScreenWidth) ~/ 2;
     final MenuDef m = current;
     // Banner.
     if (m.bannerPatch != null) {
       final Patch? p = _gc.patch(m.bannerPatch!);
       if (p != null) {
-        // Centre the banner horizontally near the top (vanilla draws M_DOOM at
-        // 94,2 but we centre for portability).
-        final int bx = (kScreenWidth - p.width) ~/ 2;
+        // Centre the banner horizontally near the top on the FULL screen width
+        // (vanilla draws M_DOOM at 94,2 but we centre for portability).
+        final int bx = (fb.width - p.width) ~/ 2;
         p.draw(fb, bx, 2);
       }
     }
@@ -579,19 +581,19 @@ class MenuController {
       final MenuItem item = m.items[i];
       final int iy = m.y + i * m.lineHeight;
       if (item.patchName != null) {
-        _gc.draw(fb, item.patchName!, m.x, iy);
+        _gc.draw(fb, item.patchName!, ox + m.x, iy);
       }
       // Slider items draw a thermometer one row BELOW the label (M_DrawThermo at
       // y + LINEHEIGHT*(item+1)), exactly as M_DrawSound / M_DrawOptions.
       if (item.status == MenuItemStatus.slider && item.thermDot != null) {
-        _drawThermo(fb, m.x, iy + m.lineHeight, item.thermWidth,
+        _drawThermo(fb, ox + m.x, iy + m.lineHeight, item.thermWidth,
             item.thermDot!().clamp(0, item.thermWidth - 1));
       }
     }
     // Skull cursor to the left of the selected item (vanilla SKULLXOFF = -32).
     final String skull = _skullFrame == 0 ? 'M_SKULL1' : 'M_SKULL2';
     final int cy = m.y - 5 + m.selected * m.lineHeight;
-    _gc.draw(fb, skull, m.x - 32, cy);
+    _gc.draw(fb, skull, ox + m.x - 32, cy);
   }
 
   /// M_DrawThermo (m_menu.c): the volume/size slider. M_THERML left cap, then
@@ -610,14 +612,15 @@ class MenuController {
   }
 
   /// M_Drawer message box: centre each '\n'-separated line vertically, using the
-  /// STCFN HUD font (vanilla draws the message via the small font).
+  /// STCFN HUD font (vanilla draws the message via the small font). Centres
+  /// horizontally on the FULL screen width (widescreen-aware).
   void _drawMessage(Framebuffer fb, String text) {
     final List<String> lines = text.split('\n');
     final int lineH = _font.height;
     int y = (kScreenHeight - lines.length * lineH) ~/ 2;
     for (final String line in lines) {
       final int w = _font.widthOf(line);
-      final int x = (kScreenWidth - w) ~/ 2;
+      final int x = (fb.width - w) ~/ 2;
       _font.draw(fb, x, y, line);
       y += lineH;
     }

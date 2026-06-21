@@ -118,33 +118,36 @@ class Intermission {
   void draw(Framebuffer fb) {
     final IntermissionStats? s = _stats;
     if (s == null) return;
-    // Background (WIMAP0 for episode 1).
+    // Centre the 320-wide intermission on a wider (widescreen) framebuffer.
+    final int ox = (fb.width - kScreenWidth) ~/ 2;
+    // Background (WIMAP0 for episode 1). Black-fill the side strips first.
+    if (ox > 0) fb.clear(0);
     if (_gc.has('WIMAP0')) {
-      _gc.draw(fb, 'WIMAP0', 0, 0);
+      _gc.draw(fb, 'WIMAP0', ox + 0, 0);
     } else {
       fb.clear(0);
     }
 
-    // "finished" / "entering" titles.
-    _gc.draw(fb, 'WIF', (kScreenWidth - (_gc.patch('WIF')?.width ?? 0)) ~/ 2, 14);
+    // "finished" / "entering" titles. Centre on the full screen width.
+    _gc.draw(fb, 'WIF', (fb.width - (_gc.patch('WIF')?.width ?? 0)) ~/ 2, 14);
 
     // Stat rows: Kills / Items / Secrets / Time, vanilla SP_STATSX/Y layout.
     const int statsX = 280;
     const int statsY = 50;
     const int rowH = 18;
-    _gc.draw(fb, 'WIOSTK', 50, statsY); // "Kills"
-    _percentFont.drawPercent(fb, statsX, statsY, _killPct);
-    _gc.draw(fb, 'WIOSTI', 50, statsY + rowH); // "Items"
-    _percentFont.drawPercent(fb, statsX, statsY + rowH, _itemPct);
-    _gc.draw(fb, 'WISCRT2', 50, statsY + rowH * 2); // "Secret"
-    _percentFont.drawPercent(fb, statsX, statsY + rowH * 2, _secretPct);
+    _gc.draw(fb, 'WIOSTK', ox + 50, statsY); // "Kills"
+    _percentFont.drawPercent(fb, ox + statsX, statsY, _killPct);
+    _gc.draw(fb, 'WIOSTI', ox + 50, statsY + rowH); // "Items"
+    _percentFont.drawPercent(fb, ox + statsX, statsY + rowH, _itemPct);
+    _gc.draw(fb, 'WISCRT2', ox + 50, statsY + rowH * 2); // "Secret"
+    _percentFont.drawPercent(fb, ox + statsX, statsY + rowH * 2, _secretPct);
 
     // Time / Par at the bottom (WITIME / WIPAR).
     const int timeY = 160;
-    _gc.draw(fb, 'WITIME', 16, timeY);
-    _drawTime(fb, 90, timeY, s.levelTimeSeconds);
-    _gc.draw(fb, 'WIPAR', 180, timeY);
-    _drawTime(fb, 248, timeY, s.parTimeSeconds);
+    _gc.draw(fb, 'WITIME', ox + 16, timeY);
+    _drawTime(fb, ox + 90, timeY, s.levelTimeSeconds);
+    _gc.draw(fb, 'WIPAR', ox + 180, timeY);
+    _drawTime(fb, ox + 248, timeY, s.parTimeSeconds);
   }
 
   void _drawTime(Framebuffer fb, int x, int y, int seconds) {

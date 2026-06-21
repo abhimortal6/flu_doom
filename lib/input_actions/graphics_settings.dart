@@ -30,6 +30,16 @@ extension UpscaleFilterX on UpscaleFilter {
       };
 }
 
+/// Render aspect mode. Unlike every other setting in this file, this DOES change
+/// the 3D renderer's horizontal resolution (a true-widescreen wider FOV — the
+/// Crispy/Woof technique), NOT a present-layer stretch:
+///   - [fourThree]  : the vanilla 320x200 (4:3) render, letterboxed. The exact
+///                    1:1 reference; render golden matches this path.
+///   - [widescreen] : a WIDER render (e.g. 426x200 for 16:9) so you see more of
+///                    the scene left/right with correct proportions and no
+///                    horizontal stretch. Default on mobile.
+enum AspectMode { fourThree, widescreen }
+
 /// All persisted video/present options.
 class GraphicsSettings {
   const GraphicsSettings({
@@ -38,6 +48,7 @@ class GraphicsSettings {
     this.scaleMode = ScaleMode.fit,
     this.crtScanlines = false,
     this.crtIntensity = defaultCrtIntensity,
+    this.aspectMode = AspectMode.widescreen,
   });
 
   /// Default CRT effect strength (0..1) used when the toggle is first enabled.
@@ -45,6 +56,10 @@ class GraphicsSettings {
 
   /// Upscale filter (SHARP nearest vs SMOOTH bilinear).
   final UpscaleFilter filter;
+
+  /// Render aspect mode (true-widescreen wider FOV vs 4:3). Default widescreen.
+  /// This is the ONLY setting here that changes the renderer's width.
+  final AspectMode aspectMode;
 
   /// Doom's 4:3 pixel-aspect correction (height * 1.2). ON by default on mobile.
   final bool pixelAspectCorrection;
@@ -74,6 +89,7 @@ class GraphicsSettings {
     ScaleMode? scaleMode,
     bool? crtScanlines,
     double? crtIntensity,
+    AspectMode? aspectMode,
   }) {
     return GraphicsSettings(
       filter: filter ?? this.filter,
@@ -82,6 +98,7 @@ class GraphicsSettings {
       scaleMode: scaleMode ?? this.scaleMode,
       crtScanlines: crtScanlines ?? this.crtScanlines,
       crtIntensity: crtIntensity ?? this.crtIntensity,
+      aspectMode: aspectMode ?? this.aspectMode,
     );
   }
 
@@ -91,6 +108,7 @@ class GraphicsSettings {
         'scaleMode': scaleMode.name,
         'crtScanlines': crtScanlines,
         'crtIntensity': crtIntensity,
+        'aspectMode': aspectMode.name,
       };
 
   factory GraphicsSettings.fromJson(Map<String, dynamic> j) {
@@ -110,6 +128,11 @@ class GraphicsSettings {
       crtIntensity:
           ((j['crtIntensity'] as num?)?.toDouble() ?? defaultCrtIntensity)
               .clamp(0.0, 1.0),
+      // Backward-compatible: pre-widescreen saves omit this key -> widescreen.
+      aspectMode: AspectMode.values
+          .where((a) => a.name == j['aspectMode'])
+          .cast<AspectMode?>()
+          .firstWhere((a) => true, orElse: () => AspectMode.widescreen)!,
     );
   }
 
@@ -123,7 +146,8 @@ class GraphicsSettings {
       other.pixelAspectCorrection == pixelAspectCorrection &&
       other.scaleMode == scaleMode &&
       other.crtScanlines == crtScanlines &&
-      other.crtIntensity == crtIntensity;
+      other.crtIntensity == crtIntensity &&
+      other.aspectMode == aspectMode;
 
   @override
   int get hashCode => Object.hash(
@@ -132,6 +156,7 @@ class GraphicsSettings {
         scaleMode,
         crtScanlines,
         crtIntensity,
+        aspectMode,
       );
 }
 

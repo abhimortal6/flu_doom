@@ -387,9 +387,16 @@ class GameState {
     if (menu.active) menu.draw(fb);
   }
 
+  /// Centre offset for a 320-wide fullscreen patch on a wider framebuffer.
+  /// 0 on a 320-wide buffer (golden-safe).
+  static int _xOffset(Framebuffer fb) => (fb.width - kScreenWidth) ~/ 2;
+
   void _drawTitle(Framebuffer fb) {
+    // Black-fill first so the side strips beside the centred 320-wide TITLEPIC
+    // are clean on a widescreen buffer (no garbage / stale pixels).
+    if (fb.width > kScreenWidth) fb.clear(0);
     if (_gc.has('TITLEPIC')) {
-      _gc.draw(fb, 'TITLEPIC', 0, 0);
+      _gc.draw(fb, 'TITLEPIC', _xOffset(fb), 0);
     } else {
       fb.clear(0);
     }
@@ -398,8 +405,9 @@ class GameState {
   void _drawFinale(Framebuffer fb) {
     // Shareware end-of-episode-1 uses the HELP/CREDIT style text screen; we
     // show CREDIT as a placeholder finale background.
+    if (fb.width > kScreenWidth) fb.clear(0);
     if (_gc.has('CREDIT')) {
-      _gc.draw(fb, 'CREDIT', 0, 0);
+      _gc.draw(fb, 'CREDIT', _xOffset(fb), 0);
     } else {
       fb.clear(0);
     }
@@ -408,7 +416,7 @@ class GameState {
   void _drawPause(Framebuffer fb) {
     final Patch? p = _gc.patch('M_PAUSE');
     if (p != null) {
-      p.draw(fb, (kScreenWidth - p.width) ~/ 2, 4);
+      p.draw(fb, (fb.width - p.width) ~/ 2, 4);
     }
   }
 }

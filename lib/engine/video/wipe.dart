@@ -43,10 +43,13 @@ import 'framebuffer.dart';
 ///      current melted frame into a [Framebuffer]. When [update] returns true the
 ///      wipe is complete (wipe_exitMelt has effectively run).
 class WipeMelt {
-  WipeMelt._(this._wipeScr, this._scrStart, this._scrEnd, this._y);
+  WipeMelt._(this._wipeScr, this._scrStart, this._scrEnd, this._y, this._width);
 
-  /// Number of pixels per screen (SCREENWIDTH * SCREENHEIGHT).
-  static const int _size = kScreenWidth * kScreenHeight;
+  /// Screen width in pixels (SCREENWIDTH). 320 in 4:3, wider in widescreen.
+  /// Always even (so the dpixel half-width is an integer). [_height] is the
+  /// fixed SCREENHEIGHT (200).
+  final int _width;
+  static const int _height = kScreenHeight;
 
   /// The live output buffer (row-major, == I_VideoBuffer / `wipe_scr`).
   final Uint8List _wipeScr;
@@ -82,10 +85,16 @@ class WipeMelt {
   /// the start screen is copied into the live buffer, start/end are transformed
   /// to column-major, and the per-column offsets are seeded from [mRandom].
   factory WipeMelt.start(Uint8List startBytes, Uint8List endBytes) {
-    assert(startBytes.length == _size, 'start screen must be 320x200');
-    assert(endBytes.length == _size, 'end screen must be 320x200');
+    // SCREENHEIGHT is fixed (200); SCREENWIDTH is derived from the byte length so
+    // the melt works on a widescreen framebuffer too. Must be even.
+    final int width = startBytes.length ~/ kScreenHeight;
+    assert(startBytes.length == width * kScreenHeight, 'screen height must be 200');
+    assert(endBytes.length == startBytes.length,
+        'start and end screens must be the same size');
+    assert(width.isEven, 'screen width must be even (dpixel packing)');
+    final int size = width * kScreenHeight;
 
-    final Uint8List wipeScr = Uint8List(_size);
+    final Uint8List wipeScr = Uint8List(size);
     final Uint8List scrStart = Uint8List.fromList(startBytes);
     final Uint8List scrEnd = Uint8List.fromList(endBytes);
 
@@ -95,15 +104,15 @@ class WipeMelt {
 
     // Column-major transform of start and end (width/2 because dpixel_t packs 2
     // pixels). In bytes, the "element" is 2 wide, so the transform width is
-    // kScreenWidth/2 and the element size is 2 bytes.
-    _shittyColMajorXform(scrStart, kScreenWidth ~/ 2, kScreenHeight);
-    _shittyColMajorXform(scrEnd, kScreenWidth ~/ 2, kScreenHeight);
+    // width/2 and the element size is 2 bytes.
+    _shittyColMajorXform(scrStart, width ~/ 2, kScreenHeight);
+    _shittyColMajorXform(scrEnd, width ~/ 2, kScreenHeight);
 
     // setup initial column positions (y<0 => not ready to scroll yet).
     //   y = Z_Malloc(width * sizeof(int))   — width == SCREENWIDTH (not halved).
-    final Int32List y = Int32List(kScreenWidth);
+    final Int32List y = Int32List(width);
     y[0] = -(mRandom() % 16);
-    for (int i = 1; i < kScreenWidth; i++) {
+    for (int i = 1; i < width; i++) {
       final int r = (mRandom() % 3) - 1;
       y[i] = y[i - 1] + r;
       if (y[i] > 0) {
@@ -113,7 +122,7 @@ class WipeMelt {
       }
     }
 
-    return WipeMelt._(wipeScr, scrStart, scrEnd, y);
+    return WipeMelt._(wipeScr, scrStart, scrEnd, y, width);
   }
 
   /// wipe_shittyColMajorXform: transpose [array] (treated as a `width` x `height`
@@ -146,8 +155,8 @@ class WipeMelt {
     if (_done) return true;
 
     // width /= 2  (dpixel columns).
-    const int width = kScreenWidth ~/ 2;
-    const int height = kScreenHeight;
+    final int width = _width ~/ 2;
+    const int height = _height;
 
     final Uint8List wipeScr = _wipeScr;
     final Uint8List scrStart = _scrStart;
@@ -203,7 +212,7 @@ class WipeMelt {
   /// Write the current melted frame (the live `wipe_scr` row-major buffer) into
   /// [out]'s indexed pixels. Call after [update] each frame to present the melt.
   void compose(Framebuffer out) {
-    assert(out.width == kScreenWidth && out.height == kScreenHeight);
+    assert(out.width == _width && out.height == _height);
     out.pixels.setAll(0, _wipeScr);
   }
 

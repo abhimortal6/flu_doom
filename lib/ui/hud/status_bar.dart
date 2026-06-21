@@ -287,22 +287,43 @@ class StatusBar {
     120, 163, 236, 249
   ];
 
+  /// The 320-wide status bar is authored for a 320-wide screen. On a wider
+  /// (widescreen) framebuffer we centre it horizontally: every layout x is
+  /// shifted by [_xOffset]. 0 on a 320-wide buffer (golden-safe).
+  static int _xOffsetFor(Framebuffer fb) => (fb.width - kScreenWidth) ~/ 2;
+
   /// Draw the full status bar overlay into [fb] for player [p].
   /// Multiplayer/deathmatch shows frags where the arsenal would be when
   /// [deathmatch] is true.
   void draw(Framebuffer fb, PlayerStatus p, {bool deathmatch = false}) {
+    final int ox = _xOffsetFor(fb);
+
+    // On a wider buffer, fill the side strips beside the centred 320 bar (the
+    // bar rows would otherwise show stale 3D pixels). Black (index 0) is clean.
+    if (ox > 0) {
+      for (int y = barY; y < barY + barHeight && y < fb.height; y++) {
+        final int row = y * fb.width;
+        for (int x = 0; x < ox; x++) {
+          fb.pixels[row + x] = 0;
+        }
+        for (int x = ox + kScreenWidth; x < fb.width; x++) {
+          fb.pixels[row + x] = 0;
+        }
+      }
+    }
+
     // Background bar.
-    if (_stbar != null) _stbar.drawV(fb, 0, barY);
+    if (_stbar != null) _stbar.drawV(fb, ox + 0, barY);
 
     // Big ammo for the ready weapon (blank if the weapon uses no ammo).
     final AmmoType? at = p.readyWeaponAmmo;
     if (at != null) {
-      _bigFont.drawNum(fb, ammoX, ammoY, p.ammo(at), maxDigits: 3);
+      _bigFont.drawNum(fb, ox + ammoX, ammoY, p.ammo(at), maxDigits: 3);
     }
 
     // Health and armor percentages.
-    _bigFont.drawPercent(fb, healthX, healthY, p.health);
-    _bigFont.drawPercent(fb, armorX, armorY, p.armor);
+    _bigFont.drawPercent(fb, ox + healthX, healthY, p.health);
+    _bigFont.drawPercent(fb, ox + armorX, armorY, p.armor);
 
     // Small ammo/maxammo table on the far right. Vanilla row order matches the
     // ammotype_t enum: clip, shell, cell, misl (rows at Y 173/179/185/191).
@@ -314,39 +335,40 @@ class StatusBar {
     ];
     for (int i = 0; i < order.length; i++) {
       final int rowY = ammoRow0Y + i * ammoRowStep;
-      _smallFont.drawNum(fb, smallAmmoX, rowY, p.ammo(order[i]), maxDigits: 3);
-      _smallFont.drawNum(fb, smallMaxAmmoX, rowY, p.maxAmmo(order[i]),
+      _smallFont.drawNum(fb, ox + smallAmmoX, rowY, p.ammo(order[i]),
+          maxDigits: 3);
+      _smallFont.drawNum(fb, ox + smallMaxAmmoX, rowY, p.maxAmmo(order[i]),
           maxDigits: 3);
     }
 
     if (deathmatch) {
       // Frag count where the arsenal sits.
-      _bigFont.drawNum(fb, fragsX, fragsY, p.fragCount, maxDigits: 2);
+      _bigFont.drawNum(fb, ox + fragsX, fragsY, p.fragCount, maxDigits: 2);
     } else {
       // Arsenal frame + weapon numbers (weapons 2..7 shown in a 3x2 grid).
-      if (_starms != null) _starms.drawV(fb, armsBgX, armsBgY);
-      _drawArsenal(fb, p);
+      if (_starms != null) _starms.drawV(fb, ox + armsBgX, armsBgY);
+      _drawArsenal(fb, p, ox);
     }
 
     // Face.
     final Patch? face = _currentFacePatch();
-    if (face != null) face.drawV(fb, faceX, faceY);
+    if (face != null) face.drawV(fb, ox + faceX, faceY);
 
     // Keycards (blue/yellow/red). Vanilla shows skull OR card in one slot;
     // we show whichever the player owns, card taking precedence.
-    _drawKey(fb, 0, key0Y, p); // blue
-    _drawKey(fb, 1, key1Y, p); // yellow
-    _drawKey(fb, 2, key2Y, p); // red
+    _drawKey(fb, 0, key0Y, p, ox); // blue
+    _drawKey(fb, 1, key1Y, p, ox); // yellow
+    _drawKey(fb, 2, key2Y, p, ox); // red
   }
 
-  void _drawArsenal(Framebuffer fb, PlayerStatus p) {
+  void _drawArsenal(Framebuffer fb, PlayerStatus p, int ox) {
     // STARMS shows weapon slots 2..7 in a 3-wide, 2-tall grid (vanilla
     // arms[6]). Slot numbers are 2..7; ownership picks bright vs grey glyph.
     for (int i = 0; i < 6; i++) {
       final int slot = i + 2;
       final int col = i % 3;
       final int rowIdx = i ~/ 3;
-      final int gx = armsX + col * armsXSpace;
+      final int gx = ox + armsX + col * armsXSpace;
       final int gy = armsY + rowIdx * armsYSpace;
       final NumberFont f = p.ownsWeapon(slot) ? _smallFont : _greyFont;
       // Vanilla w_arms[i] is right-justified at ST_ARMSX + col*XSPACE
@@ -355,14 +377,14 @@ class StatusBar {
     }
   }
 
-  void _drawKey(Framebuffer fb, int color, int y, PlayerStatus p) {
+  void _drawKey(Framebuffer fb, int color, int y, PlayerStatus p, int ox) {
     // cards[]: 0..2 = cards, 3..5 = skulls. Show card icon if owned, else skull.
     final bool card = p.ownsCard(color);
     final bool skull = p.ownsCard(color + 3);
     if (!card && !skull) return;
     final int idx = card ? color : color + 3;
     if (idx < _keys.length && _keys[idx] != null) {
-      _keys[idx]!.drawV(fb, keyX, y);
+      _keys[idx]!.drawV(fb, ox + keyX, y);
     }
   }
 }

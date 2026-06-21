@@ -84,6 +84,26 @@ class _GraphicsSettingsScreenState extends State<GraphicsSettingsScreen> {
           ),
           const Divider(),
           const _SectionHeader('Aspect & Fit'),
+          ListTile(
+            title: const Text('Aspect ratio'),
+            subtitle: const Text(
+              'Widescreen renders a WIDER field of view (more scene left/right) '
+              'to fill a 16:9 screen with no stretching. 4:3 is the classic '
+              'letterboxed view.',
+            ),
+            trailing: SegmentedButton<AspectMode>(
+              key: const Key('gfxAspectMode'),
+              segments: const <ButtonSegment<AspectMode>>[
+                ButtonSegment(
+                    value: AspectMode.fourThree, label: Text('4:3')),
+                ButtonSegment(
+                    value: AspectMode.widescreen, label: Text('Wide')),
+              ],
+              selected: <AspectMode>{_settings.aspectMode},
+              onSelectionChanged: (sel) =>
+                  _set(_settings.copyWith(aspectMode: sel.first)),
+            ),
+          ),
           SwitchListTile(
             key: const Key('gfxAspect'),
             title: const Text('4:3 pixel-aspect correction'),
