@@ -34,6 +34,7 @@ void main() {
           opacity: 0.8,
           scale: 1.4,
           handed: HandedLayout.left,
+          lookSensitivity: 2.5,
         ),
       );
       final loaded = store.loadOverlay();
@@ -41,6 +42,7 @@ void main() {
       expect(loaded.opacity, closeTo(0.8, 1e-9));
       expect(loaded.scale, closeTo(1.4, 1e-9));
       expect(loaded.handed, HandedLayout.left);
+      expect(loaded.lookSensitivity, closeTo(2.5, 1e-9));
     });
 
     test('bindings round-trip after rebind', () async {

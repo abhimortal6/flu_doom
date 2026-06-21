@@ -35,6 +35,7 @@ class OverlaySettings {
     this.opacity = 0.45,
     this.scale = 1.0,
     this.handed = HandedLayout.right,
+    this.lookSensitivity = 1.0,
     this.positions = const <String, ButtonPosition>{},
   });
 
@@ -50,6 +51,10 @@ class OverlaySettings {
   /// Left/right-handed cluster layout.
   final HandedLayout handed;
 
+  /// Drag-to-look (camera) sensitivity multiplier. 1.0 ≈ vanilla mouse feel;
+  /// higher turns faster per unit of horizontal drag. Sensible range 0.25..4.0.
+  final double lookSensitivity;
+
   /// Optional drag-repositioned button overrides, keyed by overlay button id
   /// (see [OverlayButtonId]). Empty = use default layout positions.
   final Map<String, ButtonPosition> positions;
@@ -59,6 +64,7 @@ class OverlaySettings {
     double? opacity,
     double? scale,
     HandedLayout? handed,
+    double? lookSensitivity,
     Map<String, ButtonPosition>? positions,
   }) {
     return OverlaySettings(
@@ -66,6 +72,7 @@ class OverlaySettings {
       opacity: opacity ?? this.opacity,
       scale: scale ?? this.scale,
       handed: handed ?? this.handed,
+      lookSensitivity: lookSensitivity ?? this.lookSensitivity,
       positions: positions ?? this.positions,
     );
   }
@@ -75,6 +82,7 @@ class OverlaySettings {
     'opacity': opacity,
     'scale': scale,
     'handed': handed.name,
+    'lookSensitivity': lookSensitivity,
     'positions': positions.map((k, v) => MapEntry(k, v.toJson())),
   };
 
@@ -84,6 +92,7 @@ class OverlaySettings {
       visible: j['visible'] as bool? ?? true,
       opacity: (j['opacity'] as num?)?.toDouble() ?? 0.45,
       scale: (j['scale'] as num?)?.toDouble() ?? 1.0,
+      lookSensitivity: (j['lookSensitivity'] as num?)?.toDouble() ?? 1.0,
       handed: HandedLayout.values
           .where((h) => h.name == j['handed'])
           .cast<HandedLayout?>()

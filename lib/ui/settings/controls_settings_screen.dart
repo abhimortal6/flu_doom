@@ -171,6 +171,19 @@ class _OverlaySection extends StatelessWidget {
           ),
         ),
         ListTile(
+          title: const Text('Look sensitivity'),
+          subtitle: Slider(
+            key: const Key('overlayLookSensitivity'),
+            min: 0.25,
+            max: 4.0,
+            divisions: 15,
+            value: settings.lookSensitivity.clamp(0.25, 4.0),
+            label: '${settings.lookSensitivity.toStringAsFixed(2)}x',
+            onChanged: (v) =>
+                onChanged(settings.copyWith(lookSensitivity: v)),
+          ),
+        ),
+        ListTile(
           title: const Text('Handedness'),
           trailing: SegmentedButton<HandedLayout>(
             segments: const <ButtonSegment<HandedLayout>>[

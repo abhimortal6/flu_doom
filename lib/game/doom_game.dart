@@ -35,6 +35,7 @@ import '../engine/video/wipe.dart';
 import '../engine/wad/wad.dart';
 import '../input_actions/action_dispatcher.dart';
 import '../input_actions/action_keyboard_listener.dart';
+import '../input_actions/analog_input.dart';
 import '../input_actions/controls_settings.dart';
 import '../input_actions/key_bindings.dart';
 import '../ui/controls/touch_controls_overlay.dart';
@@ -71,6 +72,12 @@ class _DoomGameState extends State<DoomGame>
 
   // Subsystems (assigned during _boot).
   late final EventQueueActionSink _sink = EventQueueActionSink(_events);
+
+  // Analog touch side channel (PUBG-style movement stick + drag-to-look). The
+  // overlay writes it; the KeyStateBridge reads it into the ticcmd each tic.
+  // Idle (all-zero) when no touch input is present, so keyboard play is
+  // unaffected.
+  final AnalogInput _analog = AnalogInput();
   PlaySim? _sim;
   GameState? _gs;
   PlaypalSet? _palettes;
@@ -310,7 +317,8 @@ class _DoomGameState extends State<DoomGame>
       _palettes = palettes;
       _sim = sim;
       _gs = gs;
-      _keyBridge = KeyStateBridge(_sink);
+      _analog.lookSensitivity = _overlay.lookSensitivity;
+      _keyBridge = KeyStateBridge(_sink, analog: _analog);
       // wipegamestate starts at the boot state (GS_DEMOSCREEN), matching the
       // first presented frame so no spurious wipe fires before any transition.
       _wipegamestate = gs.gamestate;
@@ -418,13 +426,17 @@ class _DoomGameState extends State<DoomGame>
     }
   }
 
-  void _onAppPaused() => _sink.releaseAll();
+  void _onAppPaused() {
+    _sink.releaseAll();
+    _analog.reset();
+  }
 
   Future<void> _openControlsSettings() async {
     final ControlsSettingsStore? store = _store;
     if (store == null) return;
-    // Release held keys so nothing sticks while the settings route is open.
+    // Release held keys/analog so nothing sticks while the settings route is open.
     _sink.releaseAll();
+    _analog.reset();
     await Navigator.of(context).push(MaterialPageRoute<void>(
       builder: (_) => ControlsSettingsScreen(
         store: store,
@@ -432,11 +444,13 @@ class _DoomGameState extends State<DoomGame>
           setState(() {
             _overlay = overlay;
             _bindings = bindings;
+            _analog.lookSensitivity = overlay.lookSensitivity;
           });
         },
       ),
     ));
     _sink.releaseAll();
+    _analog.reset();
   }
 
   @override
@@ -491,7 +505,11 @@ class _DoomGameState extends State<DoomGame>
               scaleMode: ScaleMode.fit,
               pixelAspectCorrection: true,
             ),
-            TouchControlsOverlay(sink: _sink, settings: _overlay),
+            TouchControlsOverlay(
+              sink: _sink,
+              analog: _analog,
+              settings: _overlay,
+            ),
             if (_showDebug)
               DebugOverlay(
                 fps: _loop?.fps ?? 0,

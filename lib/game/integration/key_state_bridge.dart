@@ -9,14 +9,23 @@
 // physical key (arrows / WASD / touch) produced it.
 
 import '../../engine/input/doomkeys.dart';
+import '../../engine/math/fixed.dart';
 import '../../input_actions/action_dispatcher.dart';
+import '../../input_actions/analog_input.dart';
 import '../play/g_build.dart';
 
 /// Translates the controls layer's held-key set into a play-sim [KeyState].
 class KeyStateBridge {
-  KeyStateBridge(this.sink);
+  KeyStateBridge(this.sink, {AnalogInput? analog})
+      : analog = analog ?? AnalogInput();
 
   final EventQueueActionSink sink;
+
+  /// Analog side channel written by the touch overlay (movement stick + look
+  /// drag). When no touch input is present every field is zero, so the keyboard
+  /// path is byte-identical to before. Defaults to a fresh (idle) instance so
+  /// keyboard-only callers (and tests) need not supply one.
+  final AnalogInput analog;
 
   final KeyState _keys = KeyState();
 
@@ -47,6 +56,15 @@ class KeyStateBridge {
         break;
       }
     }
+
+    // Analog channel (touch movement stick + drag-to-look). FRACUNIT-scaled
+    // deflection for the stick; mousex-equivalent for the look. The look delta
+    // is consumed (cleared) here so it is applied exactly once per tic, like
+    // vanilla `mousex = 0`.
+    _keys.analogForward = analog.forwardFixed(kFracUnit);
+    _keys.analogSide = analog.sideFixed(kFracUnit);
+    _keys.analogRun = analog.run;
+    _keys.analogTurn = analog.takeMouseX();
 
     return _keys;
   }

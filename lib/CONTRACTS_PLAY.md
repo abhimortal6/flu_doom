@@ -102,8 +102,17 @@ from the foundation `EventQueue` / `DoomKey` state:
 | `run`            | speed (run) modifier                                 |
 | `strafeModifier` | turn keys become strafe                              |
 | `use` / `attack` | BT_USE / BT_ATTACK                                   |
-| `analogTurn`     | mouse turn delta (raw angleturn units, subtractive)  |
+| `analogTurn`     | mouse/touch-look turn delta (vanilla `mousex` units; builder applies `angleturn -= mousex*0x8`) |
+| `analogForward`  | analog stick forward/back, 16.16 fixed in [-FRACUNIT, FRACUNIT] (+ = forward); `FixedMul(forwardmove[tier])`, summed then clamped to MAXPLMOVE |
+| `analogSide`     | analog stick strafe, 16.16 fixed in [-FRACUNIT, FRACUNIT] (+ = strafe right) |
+| `analogRun`      | analog stick at full deflection → run tier for the analog contribution |
 | `weapon`         | requested slot 1..8, 0 = no change                   |
+
+> **Note:** `analogTurn`'s scaling changed from "raw angleturn units" to the
+> vanilla `mousex`-equivalent (the builder now does `angleturn -= analogTurn*0x8`,
+> matching g_game.c's mouse-look path). The touch drag-to-look feeds a scaled
+> `mousex` via `AnalogInput.takeMouseX()`. Analog fields default to zero, so a
+> keyboard-only `KeyState` produces byte-identical ticcmds to before.
 
 These map 1:1 to vanilla key bindings. The builder keeps the only cross-tic
 state vanilla does (`turnHeld` for turn acceleration).
