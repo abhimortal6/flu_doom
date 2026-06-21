@@ -23,6 +23,7 @@ class ActionKeyboardListener extends StatefulWidget {
     required this.child,
     this.autofocus = true,
     this.enabled = true,
+    this.onSystemKey,
   });
 
   /// Active key->action bindings (rebindable; updates apply immediately).
@@ -30,6 +31,12 @@ class ActionKeyboardListener extends StatefulWidget {
 
   /// Where resolved actions are dispatched.
   final ActionSink sink;
+
+  /// Optional hook for non-game "system" keys (e.g. F11 fullscreen) that are
+  /// not part of the rebindable game bindings. Invoked on KeyDown only; return
+  /// true to mark the event handled (swallowing it from the game bindings).
+  /// Keeps the engine input path untouched while letting the shell own F11.
+  final bool Function(KeyEvent event)? onSystemKey;
 
   final Widget child;
   final bool autofocus;
@@ -52,6 +59,13 @@ class _ActionKeyboardListenerState extends State<ActionKeyboardListener> {
 
   KeyEventResult _onKey(FocusNode node, KeyEvent event) {
     if (!widget.enabled) return KeyEventResult.ignored;
+
+    // System keys (e.g. F11 fullscreen) are handled before — and independently
+    // of — the rebindable game bindings, on the KeyDown edge only.
+    if (event is KeyDownEvent && widget.onSystemKey != null) {
+      if (widget.onSystemKey!(event)) return KeyEventResult.handled;
+    }
+
     final action = widget.bindings.actionFor(event.logicalKey);
     if (action == null) return KeyEventResult.ignored;
 

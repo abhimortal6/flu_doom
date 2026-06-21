@@ -52,6 +52,7 @@ dependencies:
   # many concurrent voices, and per-voice volume + stereo pan on
   # macOS/iOS/Android. Used only by lib/engine/sound/audio_engine.dart.
   flutter_soloud: ^4.0.9
+  window_manager: ^0.5.1
 
 dev_dependencies:
   flutter_test:

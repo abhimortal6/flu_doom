@@ -17,10 +17,10 @@
 
 import 'dart:async';
 import 'dart:io';
-import 'dart:typed_data';
 import 'dart:ui' as ui;
 
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 
 import '../engine/input/event.dart';
 import '../engine/render/renderer.dart';
@@ -42,6 +42,7 @@ import '../input_actions/graphics_settings.dart';
 import '../input_actions/key_bindings.dart';
 import '../ui/controls/touch_controls_overlay.dart';
 import '../ui/debug_overlay.dart';
+import '../ui/fullscreen.dart';
 import '../ui/settings/controls_settings_screen.dart';
 import '../ui/settings/graphics_settings_screen.dart';
 import '../ui/wad_import/wad_import_screen.dart';
@@ -753,6 +754,16 @@ class _DoomGameState extends State<DoomGame>
       child: ActionKeyboardListener(
         bindings: _bindings,
         sink: _sink,
+        // F11 toggles true OS fullscreen on desktop (no-op on web; mobile uses
+        // immersive mode at startup instead). Handled as a system key so it
+        // never collides with the rebindable game bindings.
+        onSystemKey: (event) {
+          if (event.logicalKey == LogicalKeyboardKey.f11) {
+            FullscreenController.instance.toggle();
+            return true;
+          }
+          return false;
+        },
         child: Stack(
           fit: StackFit.expand,
           children: <Widget>[

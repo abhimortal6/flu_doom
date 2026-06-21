@@ -6,9 +6,19 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
 import 'game/doom_game.dart';
+import 'ui/fullscreen.dart';
 
-void main() {
+void main() async {
   WidgetsFlutterBinding.ensureInitialized();
+  // Fullscreen setup:
+  //   * Desktop (macOS/Linux/Windows): hook window_manager so F11 can toggle
+  //     true OS fullscreen at runtime. Launch windowed (startFullscreen: false).
+  //   * Mobile (Android/iOS): launch straight into immersive-sticky fullscreen
+  //     (status/nav bars hidden) for gameplay.
+  //   * Web: no-op.
+  await FullscreenController.instance.ensureInitialized(
+    startFullscreen: false,
+  );
   // Auto-rotation: allow every orientation so the device's physical orientation
   // sensor drives portrait <-> landscape. The game view (VideoView letterboxes
   // the 320x200 framebuffer) and the touch overlay are constraint-driven
