@@ -28,12 +28,27 @@ import '../../input_actions/game_action.dart';
 import 'overlay_button_id.dart';
 import 'overlay_widgets.dart';
 
+/// Which control scheme the overlay presents.
+///
+/// The game shell picks this from the game-state machine each frame (see
+/// [DoomGame] reading `gs.isActiveLevelPlay`): GAMEPLAY only during active level
+/// play (gamestate == level AND no menu up), MENU everywhere else (title/
+/// demoScreen, intermission, finale, or while a menu is open).
+enum OverlayMode {
+  /// Stick / drag-to-look / fire / use / weapon / utility (active level play).
+  gameplay,
+
+  /// D-pad + Confirm + Back navigation cluster (menus & non-level screens).
+  menu,
+}
+
 class TouchControlsOverlay extends StatefulWidget {
   TouchControlsOverlay({
     super.key,
     required this.sink,
     AnalogInput? analog,
     this.settings = const OverlaySettings(),
+    this.mode = OverlayMode.gameplay,
   }) : analog = analog ?? AnalogInput();
 
   /// Convenience: wraps an [EventQueue] in a fresh [EventQueueActionSink].
@@ -42,15 +57,23 @@ class TouchControlsOverlay extends StatefulWidget {
     required EventQueue queue,
     AnalogInput? analog,
     OverlaySettings settings = const OverlaySettings(),
+    OverlayMode mode = OverlayMode.gameplay,
   }) : this(
           key: key,
           sink: EventQueueActionSink(queue),
           analog: analog,
           settings: settings,
+          mode: mode,
         );
 
   /// Where overlay buttons dispatch their (discrete) actions.
   final ActionSink sink;
+
+  /// Which control scheme to show this frame. Driven by the game-state machine
+  /// (the shell rebuilds the overlay when the gamestate / menu-active signal
+  /// changes), so the overlay flips between the gameplay stick/look/fire scheme
+  /// and the menu D-pad navigation cluster automatically.
+  final OverlayMode mode;
 
   /// Analog side channel for the movement stick + drag-to-look camera. The
   /// play-sim bridge reads this each tic. When the overlay is idle every field
@@ -76,11 +99,107 @@ class _TouchControlsOverlayState extends State<TouchControlsOverlay> {
   void didUpdateWidget(TouchControlsOverlay old) {
     super.didUpdateWidget(old);
     widget.analog.lookSensitivity = widget.settings.lookSensitivity;
+    // Leaving gameplay mode (e.g. a menu just opened): drop any in-flight
+    // analog move/look so movement/turning doesn't stick while the gameplay
+    // stick/look region is unmounted and unable to release it.
+    if (old.mode == OverlayMode.gameplay &&
+        widget.mode != OverlayMode.gameplay) {
+      widget.analog.reset();
+    }
   }
 
   @override
   Widget build(BuildContext context) {
     if (!widget.settings.visible) return const SizedBox.shrink();
+    if (widget.mode == OverlayMode.menu) return _buildMenu(context);
+    return _buildGameplay(context);
+  }
+
+  // ---- MENU mode: a touch navigation cluster (D-pad + Confirm + Back). ----
+  //
+  // D-pad bottom-left, Confirm/Back bottom-right (mirrored when left-handed),
+  // honoring opacity / scale / handedness. Each button posts a discrete arrow /
+  // enter / escape DoomKey via the existing tapAction path, so M_Responder sees
+  // clean per-tap presses (item-by-item nav, slider adjust, select, back-out).
+  Widget _buildMenu(BuildContext context) {
+    final OverlaySettings s = widget.settings;
+    final double op = s.opacity;
+    final bool leftHanded = s.handed == HandedLayout.left;
+
+    return Positioned.fill(
+      child: LayoutBuilder(
+        builder: (context, constraints) {
+          final bool landscape =
+              constraints.maxWidth >= constraints.maxHeight;
+          final double scale = s.scale * (landscape ? 1.0 : 0.9);
+          final double dpadSize = 180 * scale;
+          final double btn = 72 * scale;
+          final double gap = 16 * scale;
+          final EdgeInsets pad = EdgeInsets.all(16 * scale);
+
+          final Alignment dpadAlign =
+              leftHanded ? Alignment.bottomRight : Alignment.bottomLeft;
+          final Alignment actionsAlign =
+              leftHanded ? Alignment.bottomLeft : Alignment.bottomRight;
+
+          final Widget dpad = OverlayMenuDpad(
+            sink: widget.sink,
+            size: dpadSize,
+            opacity: op,
+          );
+
+          // Confirm (Enter) + Back (Esc). Both momentary taps. Back maps to
+          // GameAction.menuToggle == DoomKey.escape (open/close/back-out).
+          final Widget confirmBack = Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: leftHanded
+                ? CrossAxisAlignment.start
+                : CrossAxisAlignment.end,
+            children: <Widget>[
+              OverlayHoldButton(
+                action: GameAction.menuToggle,
+                sink: widget.sink,
+                label: 'BACK',
+                icon: Icons.arrow_back,
+                size: btn,
+                opacity: op,
+                momentary: true,
+              ),
+              SizedBox(height: gap),
+              OverlayHoldButton(
+                action: GameAction.confirm,
+                sink: widget.sink,
+                label: 'CONFIRM',
+                icon: Icons.check,
+                size: btn,
+                opacity: op,
+                momentary: true,
+              ),
+            ],
+          );
+
+          return SafeArea(
+            child: Stack(
+              children: <Widget>[
+                Align(
+                  alignment: dpadAlign,
+                  child: Padding(padding: pad, child: dpad),
+                ),
+                Align(
+                  alignment: actionsAlign,
+                  child: Padding(padding: pad, child: confirmBack),
+                ),
+              ],
+            ),
+          );
+        },
+      ),
+    );
+  }
+
+  // ---- GAMEPLAY mode: the existing stick / look / fire / use / weapon /
+  // utility overlay, shown only during active level play. ----
+  Widget _buildGameplay(BuildContext context) {
     final OverlaySettings s = widget.settings;
     final double op = s.opacity;
     final bool leftHanded = s.handed == HandedLayout.left;

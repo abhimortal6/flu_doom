@@ -3,6 +3,7 @@
 
 import 'dart:math' as math;
 
+import 'package:flutter/material.dart' show Icons;
 import 'package:flutter/widgets.dart';
 
 import '../../input_actions/action_dispatcher.dart';
@@ -341,6 +342,144 @@ class _OverlayMoveStickState extends State<OverlayMoveStick> {
           height: widget.size,
           child: CustomPaint(
             painter: _StickPainter(knob: _knob, radius: r),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+/// A 4-way directional pad for MENU navigation. Each arm is a momentary tap
+/// that posts a clean DoomKey down/up pair through [ActionSink.tapAction] so
+/// the menu responder (M_Responder) sees a discrete arrow-key press — item-by-
+/// item cursor movement and slider adjust, no auto-repeat. Used only in the
+/// overlay's MENU mode (title/demoScreen, intermission, finale, or while a menu
+/// is open); the gameplay analog stick is hidden then.
+///
+/// Maps: Up -> [GameAction.menuUp] (upArrow), Down -> menuDown (downArrow),
+/// Left -> menuLeft (leftArrow), Right -> menuRight (rightArrow). These share
+/// keycodes with the movement arrows by design (vanilla disambiguates by state).
+class OverlayMenuDpad extends StatelessWidget {
+  const OverlayMenuDpad({
+    super.key,
+    required this.sink,
+    this.size = 180,
+    this.opacity = 0.45,
+  });
+
+  final ActionSink sink;
+
+  /// Overall diameter of the square d-pad cluster.
+  final double size;
+  final double opacity;
+
+  @override
+  Widget build(BuildContext context) {
+    final double arm = size / 3;
+    Widget btn(GameAction action, String label, IconData icon) {
+      return _DpadArm(
+        sink: sink,
+        action: action,
+        label: label,
+        icon: icon,
+        size: arm,
+        opacity: opacity,
+      );
+    }
+
+    final Widget spacer = SizedBox(width: arm, height: arm);
+    return SizedBox(
+      width: size,
+      height: size,
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: <Widget>[
+          Row(
+            mainAxisSize: MainAxisSize.min,
+            children: <Widget>[
+              spacer,
+              btn(GameAction.menuUp, 'UP', Icons.keyboard_arrow_up),
+              spacer,
+            ],
+          ),
+          Row(
+            mainAxisSize: MainAxisSize.min,
+            children: <Widget>[
+              btn(GameAction.menuLeft, 'LEFT', Icons.keyboard_arrow_left),
+              spacer,
+              btn(GameAction.menuRight, 'RIGHT', Icons.keyboard_arrow_right),
+            ],
+          ),
+          Row(
+            mainAxisSize: MainAxisSize.min,
+            children: <Widget>[
+              spacer,
+              btn(GameAction.menuDown, 'DOWN', Icons.keyboard_arrow_down),
+              spacer,
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+/// One arm of [OverlayMenuDpad]: a square momentary button posting a discrete
+/// arrow-key tap. Kept square (not circular) so the four arms tile cleanly.
+class _DpadArm extends StatefulWidget {
+  const _DpadArm({
+    required this.sink,
+    required this.action,
+    required this.label,
+    required this.icon,
+    required this.size,
+    required this.opacity,
+  });
+
+  final ActionSink sink;
+  final GameAction action;
+  final String label;
+  final IconData icon;
+  final double size;
+  final double opacity;
+
+  @override
+  State<_DpadArm> createState() => _DpadArmState();
+}
+
+class _DpadArmState extends State<_DpadArm> {
+  bool _down = false;
+
+  void _press() {
+    widget.sink.tapAction(widget.action);
+    setState(() => _down = true);
+    Future<void>.delayed(const Duration(milliseconds: 120), () {
+      if (mounted) setState(() => _down = false);
+    });
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final double a = widget.opacity.clamp(0.05, 1.0);
+    return GestureDetector(
+      behavior: HitTestBehavior.opaque,
+      onTapDown: (_) => _press(),
+      child: Opacity(
+        opacity: a,
+        child: Container(
+          width: widget.size,
+          height: widget.size,
+          alignment: Alignment.center,
+          decoration: BoxDecoration(
+            color: _down ? const Color(0xFFE0A030) : const Color(0xFF202020),
+            borderRadius: BorderRadius.circular(8),
+            border: Border.all(color: const Color(0xFFFFFFFF), width: 2),
+          ),
+          child: Icon(
+            widget.icon,
+            color: const Color(0xFFFFFFFF),
+            size: widget.size * 0.6,
+            semanticLabel: widget.label,
           ),
         ),
       ),

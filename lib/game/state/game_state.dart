@@ -152,6 +152,22 @@ class GameState {
   /// Current top-level state. Starts on the demo/title screen like vanilla.
   GameStateType gamestate = GameStateType.demoScreen;
 
+  /// Read-only signal for the touch overlay: is a menu currently displayed?
+  /// Mirrors vanilla `menuactive` (MenuController.active). The overlay uses this
+  /// (plus [gamestate]) to switch between its GAMEPLAY and MENU-navigation modes.
+  /// This is a pure read; it does not mutate the state machine.
+  bool get isMenuActive => menu.active;
+
+  /// Read-only signal for the touch overlay: are we in ACTIVE LEVEL play (the
+  /// only context where the gameplay stick/look/fire overlay applies)? True when
+  /// the gamestate is the level AND no menu is up (paused level play still shows
+  /// gameplay controls so the player can unpause/look around — matching the
+  /// keyboard, which stays bound to gameplay while paused). Any other context
+  /// (title/demoScreen, intermission, finale, or a menu being open) is a MENU /
+  /// non-gameplay context.
+  bool get isActiveLevelPlay =>
+      gamestate == GameStateType.level && !menu.active;
+
   /// Pending deferred action consumed at the top of [ticker].
   GameAction _action = GameAction.nothing;
 

@@ -509,6 +509,16 @@ class _DoomGameState extends State<DoomGame>
               sink: _sink,
               analog: _analog,
               settings: _overlay,
+              // Context-aware mode: GAMEPLAY only during active level play
+              // (gamestate == level AND no menu up); MENU everywhere else
+              // (title/demoScreen, intermission, finale, or while a menu is
+              // open). Read live from the game-state machine each build; the
+              // per-frame _present() setState rebuilds this when it changes, so
+              // the overlay swaps the stick/look scheme for the menu D-pad nav
+              // cluster (and back) automatically.
+              mode: (_gs?.isActiveLevelPlay ?? false)
+                  ? OverlayMode.gameplay
+                  : OverlayMode.menu,
             ),
             if (_showDebug)
               DebugOverlay(

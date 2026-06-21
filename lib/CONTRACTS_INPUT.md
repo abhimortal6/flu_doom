@@ -164,13 +164,47 @@ wrap the game view in it instead (or alongside) to get rebindable keys.
 ## 5. Overlay — `ui/controls/touch_controls_overlay.dart`
 
 ```dart
+enum OverlayMode { gameplay, menu }
+
 class TouchControlsOverlay extends StatefulWidget {
   const TouchControlsOverlay({ required ActionSink sink,
-                               OverlaySettings settings = const OverlaySettings() });
+                               OverlaySettings settings = const OverlaySettings(),
+                               OverlayMode mode = OverlayMode.gameplay });
   TouchControlsOverlay.forQueue({ required EventQueue queue,
-                                  OverlaySettings settings = const OverlaySettings() });
+                                  OverlaySettings settings = const OverlaySettings(),
+                                  OverlayMode mode = OverlayMode.gameplay });
 }
 ```
+
+### Context-aware modes (`OverlayMode`)
+
+The overlay presents **two** control schemes; the game shell picks one per frame
+from the game-state machine and passes it as `mode`:
+
+- **`OverlayMode.gameplay`** — the existing stick / drag-to-look / fire / use /
+  weapon / utility scheme. Shown only during **active level play**.
+- **`OverlayMode.menu`** — a touch **navigation cluster** for menus and non-level
+  screens (title/demoScreen, intermission, finale, or while a menu is open):
+  - a **D-pad** (`OverlayMenuDpad`): Up/Down/Left/Right arms, each a momentary
+    tap posting `GameAction.menuUp/menuDown/menuLeft/menuRight`
+    (= DoomKey `upArrow/downArrow/leftArrow/rightArrow`) via `tapAction` — a
+    clean down/up pair so `M_Responder` sees a discrete arrow press (item-by-item
+    cursor move + slider adjust; no auto-repeat);
+  - **CONFIRM** -> `GameAction.confirm` (= DoomKey `enter`) — select;
+  - **BACK** -> `GameAction.menuToggle` (= DoomKey `escape`) — back-out / toggle.
+
+  Semantic labels: `UP`, `DOWN`, `LEFT`, `RIGHT`, `CONFIRM`, `BACK`.
+
+The shell (`lib/game/doom_game.dart`) computes the mode from the read-only
+`GameState.isActiveLevelPlay` getter (`gamestate == level && !menu.active`):
+`gameplay` when true, `menu` otherwise. The per-frame present/`setState` rebuilds
+the overlay, so the scheme swaps automatically when the gamestate / menu-active
+signal changes. On the title screen, **any** menu-cluster tap posts a key that
+`G_Responder` turns into `menu.open()` (demoScreen routes any keyDown to the
+menu) — so a keyboard-less mobile user can enter the main menu and start a game.
+Switching out of gameplay mode calls `AnalogInput.reset()` so a held stick/look
+doesn't stick while the gameplay region is unmounted. **Keyboard nav is
+unchanged** — this only ADDS a touch path posting the same DoomKey events.
 
 Self-contained, drop into a `Stack` over the game view. Returns a
 `Positioned.fill` so it overlays without consuming layout. Emits the **same**
