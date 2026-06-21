@@ -21,19 +21,11 @@ in Dart (it does not generate any game audio).
 > **web target is out of scope** (JS doubles break the fixed-point arithmetic).
 
 <p align="center">
-  <img src="docs/media/gameplay-preview.gif" alt="flu_doom running on Android — E1M1 gameplay with on-screen touch controls" width="720">
+  <a href="https://www.youtube.com/watch?v=hFafm0yrhNo" title="Watch the gameplay video on YouTube">
+    <img src="docs/media/gameplay-preview.gif" alt="flu_doom running on Android — E1M1 gameplay with on-screen touch controls" width="720">
+  </a>
   <br>
-  <em>flu_doom running on Android: E1M1, full status bar HUD, and on-screen touch controls.</em>
-</p>
-
-<p align="center">
-  <!-- Served via jsDelivr CDN (streams inline on GitHub). Update the owner/repo below to match where you push. -->
-  <video src="https://cdn.jsdelivr.net/gh/abhimortal6/flu_doom@main/docs/media/gameplay-demo.mp4" controls muted loop playsinline width="720">
-    <a href="https://cdn.jsdelivr.net/gh/abhimortal6/flu_doom@main/docs/media/gameplay-demo.mp4">▶ Watch the gameplay clip (MP4)</a>
-  </video>
-  <br>
-  <em>Gameplay clip (E1M1, Android release build). If the player doesn't load,
-  <a href="docs/media/gameplay-demo.mp4">download the MP4</a>.</em>
+  <em>flu_doom on Android (E1M1, release build) — <a href="https://www.youtube.com/watch?v=hFafm0yrhNo">▶ watch the full gameplay video on YouTube</a>.</em>
 </p>
 
 ---
