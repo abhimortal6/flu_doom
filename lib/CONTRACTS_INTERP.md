@@ -100,7 +100,7 @@ toJson/fromJson back-compat default true, ==/hashCode). Add a switch row in
 graphics_settings_screen.dart. doom_game applies it: `world.interp.enabled =
 gfx.smoothMotion`. Persisted via the existing store.
 
-## File ownership (solo, sequential waves — single agent per file region)
+## Touched files (by module region)
 - engine/system/interpolation.dart (NEW), gameloop.dart
 - game/world/world.dart (+InterpolationState ref), defs.dart (Sector old fields),
   game/play/mobj.dart (old fields), playsim.dart (capture+snap),

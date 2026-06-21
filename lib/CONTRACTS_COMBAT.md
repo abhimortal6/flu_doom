@@ -1,6 +1,6 @@
-# flu_doom — Combat Contracts (Phase 3 / combat)
+# flu_doom — Combat Contracts
 
-This document is the **frozen contract** for the COMBAT phase: a faithful
+This document is the **stable contract** for the combat subsystem: a faithful
 pure-Dart port of vanilla Doom's damage, hitscan/missile attacks, enemy AI,
 weapon psprites and pickups, from Chocolate Doom
 `src/doom/p_inter.c`, `p_pspr.c`, `p_enemy.c`, `p_map.c` (attack portion),
@@ -12,12 +12,12 @@ renderer (`lib/CONTRACTS_RENDER.md` SpriteSource) and game-state
 paraphrase vanilla; port it directly.** All gameplay randomness goes through the
 single shared `p_random.dart` (see §8).
 
-This is the GATE deliverable. The data tables (§0) are DONE and compile; the
-interfaces below (§1–§9) are FROZEN; the file partition is §10.
+The data tables (§0) are complete and compile; the interfaces below (§1–§9)
+are stable; the file partition is §10.
 
 ---
 
-## 0. Data tables — DONE (this gate)
+## 0. Data tables
 
 The full vanilla `info.c` / `d_items.c` data is now ported faithfully, generated
 by `tool/gen_info.py` straight from `reference/.../info.{c,h}`, `sounds.h`,
@@ -42,11 +42,10 @@ constructor). The project compiles and runs the full state machine today; the
 combat modules REPLACE stubs with real bodies via `ActionRegistry.register(...)`
 (`putIfAbsent` semantics — registering a real action never clobbers another).
 
-> **Faithfulness note / interface decision:** the previous hand-written slice
-> set `states[S_PLAY].nextstate = S_PLAY`. Vanilla info.c sets it to `S_NULL`
-> (the state has `tics == -1`, so it never advances). The generated table is
-> faithful (`nextState == 0`); `test/play/playsim_test.dart` was corrected to
-> assert the vanilla value.
+> **Faithfulness note / interface decision:** vanilla info.c sets
+> `states[S_PLAY].nextstate = S_NULL` (the state has `tics == -1`, so it never
+> advances). The generated table is faithful (`nextState == 0`);
+> `test/play/playsim_test.dart` asserts the vanilla value.
 
 ---
 
@@ -77,7 +76,7 @@ class Interactions {
 }
 ```
 
-**Pain/death transition rules (frozen, from `p_inter.c`):**
+**Pain/death transition rules (from `p_inter.c`):**
 - `damage <= 0` only matters through the thrust path; health subtract always.
 - Player damage: `sk_baby` halves; god/invuln returns early for `damage<1000`;
   armortype 1 absorbs `damage/3`, type 2 `damage/2`, capped at `armorpoints`;
@@ -268,7 +267,7 @@ S_PLAY_ATK1)`.
 > `A_BFGSpray` -> COMBAT-B (it's the BFG weapon effect); `A_Explode` ->
 > COMBAT-A (it's a generic mobj/missile/barrel death action). Both call into
 > COMBAT-C's `lineAttack`/`radiusAttack` facade (read-only dep). This split is
-> the only action that crosses files; it is disjoint by name (no shared write).
+> the only action that crosses files; the two functions live in separate files.
 
 ---
 
@@ -331,7 +330,7 @@ This is assigned as integration step COMBAT-D (§10).
 
 ---
 
-## 6. Renderer — NO CHANGE REQUIRED (frozen)
+## 6. Renderer — no change required
 
 Combat only **spawns more Mobjs** (puffs, blood, missiles, dropped items,
 corpses, gibs) and advances existing ones through `states[]`. They flow to the
@@ -348,7 +347,7 @@ integration nicety, NOT part of this phase, and needs no renderer change.
 
 ---
 
-## 7. SoundHook — injectable, no-op now (audio is a LATER phase)
+## 7. SoundHook — injectable, no-op now (audio is deferred)
 
 Audio is not implemented in this phase, but **every combat call site that vanilla
 sounds at MUST call the hook** so wiring real audio later is a one-line swap.
@@ -375,7 +374,7 @@ telefog, etc. — exactly where vanilla calls `S_StartSound`.
 
 ---
 
-## 8. P_Random — the ONE rng for ALL combat (frozen)
+## 8. P_Random — the ONE rng for ALL combat
 
 `lib/game/play/p_random.dart` holds THE vanilla `rndtable[256]` and the single
 shared `prndindex`. **All gameplay randomness MUST use `pRandom()` /
@@ -397,7 +396,7 @@ blood/puff counts, dropped-item, gib threshold, `A_BFGSpray`, etc.).
 
 ---
 
-## 9. P_SetMobjState reentrancy (frozen)
+## 9. P_SetMobjState reentrancy
 
 The combat code drives state changes through the EXISTING
 `MobjSim.setMobjState(mobj, stateNum)` (`p_mobj.dart`) — which already fires the
@@ -407,12 +406,13 @@ COMBAT-B's `Pspr.setPsprite`. Neither COMBAT module rewrites
 
 ---
 
-## 10. PARTITION PLAN — disjoint file ownership
+## 10. Module partition — file boundaries
 
-Four modules, no two writing the same file. Shared deps below are **read-only**.
+Four modules, each owning a disjoint set of files. Shared deps below are
+**read-only** (a module reads them but does not modify them).
 
 ### COMBAT-A — Enemy AI + sight
-- **Owns (write):** `lib/game/play/p_enemy.dart` (new),
+- **Owns:** `lib/game/play/p_enemy.dart` (new),
   `lib/game/play/p_sight.dart` (new).
 - **Registers (`A_*`):** the 51 enemy names in §3 **plus `A_Explode`** (generic
   missile/barrel death) = 52.
@@ -424,7 +424,7 @@ Four modules, no two writing the same file. Shared deps below are **read-only**.
 - Reads/writes `Sector.soundTarget` (`Object?`, play-sim owned).
 
 ### COMBAT-B — Weapons / psprites
-- **Owns (write):** `lib/game/play/p_pspr.dart` (new).
+- **Owns:** `lib/game/play/p_pspr.dart` (new).
 - **Registers (`A_*`):** the 23 weapon names in §4 (incl. `A_BFGSpray`).
 - **Read-only deps:** `player.dart` (`Player`/`Pspdef`), `info_tables.dart`
   (`weaponInfo`, `Wp`, `Am`, `St`), `state_num.dart`, `p_mobj.dart`,
@@ -433,7 +433,7 @@ Four modules, no two writing the same file. Shared deps below are **read-only**.
   `spawnPlayerMissile`, `bulletSlope`).
 
 ### COMBAT-C — Interactions + shooting + missiles + pickups
-- **Owns (write):** `lib/game/play/p_inter.dart` (new),
+- **Owns:** `lib/game/play/p_inter.dart` (new),
   `lib/game/play/p_shoot.dart` (new), `lib/game/play/sound_hook.dart` (new),
   **and extends `lib/game/play/player.dart`** with the §5 inventory fields.
 - **Provides facades** consumed by A & B: `Interactions` (`damageMobj`,
@@ -446,8 +446,8 @@ Four modules, no two writing the same file. Shared deps below are **read-only**.
   `mobj_flags.dart`, `p_map.dart`, `p_maputl.dart`, `p_mobj.dart`,
   `p_random.dart`, `sounds.dart`.
 
-### COMBAT-D — Integration (single serial step, runs AFTER A/B/C land)
-- **Owns (write):** `lib/game/play/playsim.dart` (construct & inject
+### COMBAT-D — Integration (depends on A/B/C)
+- **Owns:** `lib/game/play/playsim.dart` (construct & inject
   `Interactions`/`EnemyAi`/`Pspr`/`Shoot`/`NullSoundHook`; call `setupPsprites`
   in `spawnLevel`; call `movePsprites`/`fireWeapon` from the player-think path;
   call `touchSpecialThing` from the `MapMove.onTouchSpecial` hook),
@@ -456,26 +456,24 @@ Four modules, no two writing the same file. Shared deps below are **read-only**.
   `lib/game/integration/player_status_adapter.dart` (read LIVE inventory, §5).
 - **Read-only deps:** everything above.
 
-### Shared-write hazards (flagged)
+### Shared-write boundaries
 1. **`p_mobj.dart`** (`MobjSim`): A, B, C all CALL `setMobjState`/`spawnMobj`,
-   none WRITE the file. Missile spawning lives in COMBAT-C's `p_shoot.dart`
+   none MODIFY the file. Missile spawning lives in COMBAT-C's `p_shoot.dart`
    (calls `mobjSim.spawnMobj`), NOT inside `p_mobj.dart`, specifically to keep
-   `p_mobj.dart` single-reader. **Do not add missile code to `p_mobj.dart`.**
-2. **`player.dart`**: ONLY COMBAT-C edits it (adds inventory fields). A/B/D read
-   the new fields. If B needs a field B does not add it — it is C's deliverable;
-   coordinate the field list from §5 up front (it is frozen here, so no
-   coordination is needed at runtime).
+   `p_mobj.dart` owned by a single module. **Do not add missile code to
+   `p_mobj.dart`.**
+2. **`player.dart`**: only COMBAT-C modifies it (adds inventory fields); A/B/D
+   read the new fields. The field list is specified in §5.
 3. **`p_map.dart` / `p_maputl.dart`**: read-only for all combat code. The
    intercept/divline/PathTraverse code goes in COMBAT-C's `p_shoot.dart`, NOT
    appended to `p_maputl.dart`, to keep those world-collision files untouched.
 4. **`playsim.dart` / `spawn.dart` / `p_user.dart` / `player_status_adapter.dart`**:
-   ONLY COMBAT-D edits these, and D runs as a serial step after A/B/C, so there
-   is no concurrent write.
-5. **Renderer + `sprite_adapter.dart`**: no combat code writes them (§6).
+   only COMBAT-D modifies these (it depends on A/B/C).
+5. **Renderer + `sprite_adapter.dart`**: no combat code modifies them (§6).
 
 ---
 
-## 11. Verification status (gate)
+## 11. Verification status
 
 - `flutter analyze lib test` -> **No issues found** (full tables + 74 no-op
   `A_*` stubs + `p_random.dart` + `sounds.dart` compile).

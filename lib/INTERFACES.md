@@ -1,13 +1,13 @@
-# flu_doom — Stable Public Interfaces (Phase 1)
+# flu_doom — Stable Public Interfaces (Foundation)
 
-This document defines the **stable public contracts** that all later modules
-build against. All later modules code to these signatures. The foundation
-is a pure-Dart (no FFI) port of vanilla Doom (Chocolate Doom / doomgeneric),
-targeting **Dart native (AOT) integer semantics**.
+This document defines the **stable public contracts** that all higher-level
+modules build against. The foundation is a pure-Dart (no FFI) port of vanilla
+Doom (Chocolate Doom / doomgeneric), targeting **Dart native (AOT) integer
+semantics**.
 
 > Fixed-point math relies on 32-bit signed overflow. We do the math in Dart's
 > 64-bit ints and mask back to signed 32-bit via `toInt32`. **Web is out of
-> scope** for this phase.
+> scope**.
 
 ---
 
@@ -36,7 +36,7 @@ lib/
     system/
       gameloop.dart             GameLoop (35Hz tic + render hooks).
   game/
-    doom_game.dart              Phase-1 vertical slice widget.
+    doom_game.dart              Foundation vertical slice widget.
   ui/
     debug_overlay.dart          FPS/tic overlay.
     touch_overlay.dart          On-screen button stub.
@@ -310,6 +310,6 @@ queue once per tic inside `onTic` (mirrors vanilla's per-tic event drain).
 - `GameLoop` uses a wall-clock accumulator on a Flutter `Ticker` rather than
   `I_GetTime`; tic cadence is identical (35Hz) but frames may render between
   tics (vanilla renders once per tic). No interpolation yet.
-- Only palette 0 of PLAYPAL is exposed this phase (no damage/bonus tints).
+- Only palette 0 of PLAYPAL is exposed at this layer (no damage/bonus tints).
 - `ScaleMode` + optional 4:3 pixel-aspect correction are extensions beyond
   vanilla's fixed scaling, per product requirement.

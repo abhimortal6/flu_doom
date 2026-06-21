@@ -1,6 +1,6 @@
 # CONTRACTS_WIDESCREEN.md — true (non-stretched) widescreen rendering
 
-Wave 2 (solo). Goal: render a WIDER field of view to fill a 16:9+ screen
+Goal: render a WIDER field of view to fill a 16:9+ screen
 **without stretching** the 4:3 image. Widescreen is a TOGGLE; 4:3 (320 wide) is
 the always-available fallback and must stay byte-identical to today (the render
 golden at `test/render/render_frame_test.dart` MUST still pass).

@@ -1,4 +1,4 @@
-# flu_doom — 3D Renderer Contracts (Phase 2.x)
+# flu_doom — 3D Renderer Contracts
 
 Faithful pure-Dart port of the Chocolate Doom software renderer (`r_main`,
 `r_bsp`, `r_segs`, `r_plane`, `r_things`, `r_draw`, `r_sky`, `r_data`). Builds
@@ -39,8 +39,8 @@ test/render/
                                  asserts a real, deterministic, varied scene.
 ```
 
-No files outside `lib/engine/render/`, `test/render/`, and
-`lib/render_preview_main.dart` were created or modified.
+The renderer is contained entirely within `lib/engine/render/`,
+`test/render/`, and `lib/render_preview_main.dart`.
 
 ---
 
@@ -133,7 +133,7 @@ class SpriteFrameInfo {
 > NOTE for integration: the renderer currently calls `Patch.fromBytes` per
 > visible sprite each frame. If profiling shows this matters, the resolver
 > should return a pre-decoded `Patch` instead of raw bytes — a one-line
-> interface change deferred to the play-sim integration phase.
+> interface change, deferred.
 
 ---
 
@@ -157,8 +157,8 @@ class SpriteFrameInfo {
 
 1. **Status bar ignored — full-height 3D view.** `viewheight == screenheight`
    (200), `viewwidth == 320`, view window at (0,0). Vanilla reserves the bottom
-   32px for the status bar (`ST_HEIGHT`); we render the 3D view full-screen for
-   this phase. When the status bar is added, set the view window accordingly in
+   32px for the status bar (`ST_HEIGHT`); the 3D view is rendered full-screen.
+   To reserve the status-bar region, set the view window accordingly in
    `RenderState` (single place) — all projection/light tables derive from it.
 2. **No `R_DrawColumnLow` / detail modes.** Only the high-detail (1x) drawers
    are implemented (vanilla's "low detail" mode is obsolete).
@@ -200,11 +200,11 @@ class SpriteFrameInfo {
 
 ---
 
-## 7. Notes for the integration phase (files this module did NOT touch)
+## 7. Integration notes
 
 - `lib/game/doom_game.dart`: construct `Renderer(framebuffer: fb, world: world)`
   once after `World.fromWad`, then call `renderer.renderPlayerView(source)` in
-  the `onRender` hook, then `fb.toImage(palette)` as today.
-- The play-sim phase must provide a `SpriteSource` adapter over its mobjs +
-  sprite tables (section 3). Until then, pass nothing / `EmptySpriteSource`.
-- No new dependencies were added. (None required.)
+  the `onRender` hook, then `fb.toImage(palette)`.
+- The play-sim provides a `SpriteSource` adapter over its mobjs +
+  sprite tables (section 3). Without one, pass nothing / `EmptySpriteSource`.
+- No external dependencies are required.

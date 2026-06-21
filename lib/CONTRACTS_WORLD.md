@@ -1,13 +1,13 @@
-# flu_doom — Shared World Data Layer Contracts (Phase 2)
+# flu_doom — Shared World Data Layer Contracts
 
 This document is the **stable contract** for the shared world data layer. The
-**renderer** and the **play-simulation** agents code against THIS document
-without seeing the implementation. It builds strictly on the Phase-1 foundation
+**renderer** and the **play-simulation** modules code against this interface.
+It builds strictly on the foundation
 (`lib/INTERFACES.md`): `fixed_t`/`angle_t` math, `WadFile`/`Lump`, `Palette`.
 
 Faithful port of Chocolate Doom `r_defs.h`, `p_setup.c`, `r_data.c`,
 `d_ticcmd.h`. Spatial quantities are `fixed_t` (16.16); BAM angles are
-`angle_t`. **Web is out of scope** (native AOT int semantics, per Phase 1).
+`angle_t`. **Web is out of scope** (native AOT int semantics).
 
 ---
 
@@ -34,7 +34,7 @@ Default map loaded: **`E1M1`**.
 
 ## 1. Read / mutate boundary (the core contract)
 
-Both agents hold one `World`. Ownership of mutation is split as follows.
+Both modules hold one `World`. Ownership of mutation is split as follows.
 
 ### RENDERER — reads only, never mutates
 - `world.viewpoint` — camera (`x,y,z` fixed_t, `angle` angle_t).
@@ -69,8 +69,8 @@ Both agents hold one `World`. Ownership of mutation is split as follows.
 
 ## 2. Geometry structs — `game/world/defs.dart`
 
-All are **mutable classes** (vanilla mutates in place; both agents share
-instances). `import '.../game/world/defs.dart';`
+All are **mutable classes** (vanilla mutates in place; both the renderer and
+play-simulation share instances). `import '.../game/world/defs.dart';`
 
 ```dart
 class Vertex { fixed_t x, y; Vertex(this.x, this.y); }            // <<FRACBITS on load
@@ -257,7 +257,7 @@ column-major order (faithful to `R_GenerateComposite`); uncovered rows stay 0.
 **Renderer usage:** sample wall columns via `textureColumn(side.midTexture, c)`
 (0 means "-"/no texture — skip). Sample floor/ceiling via
 `flatPixels(sector.floorPic)`. Map the resulting palette indices through
-`Colormap` then `Palette` (Phase 1).
+`Colormap` then `Palette` (foundation).
 
 **Shareware note:** `doom1.wad` has **no TEXTURE2**; only TEXTURE1 is parsed.
 Loaded counts for E1M1: 125 textures, 56 flats, 483 sprite lumps.
@@ -332,7 +332,7 @@ class World {
   to fixed_t / BAM at spawn — matches vanilla `mapthing_t` vs `mobj_t`.
 - **No node-builder / GL nodes / extended (DeePBSP/ZDBSP) formats** — only the
   classic vanilla lump layout is parsed (sufficient for the shareware IWAD).
-- **No locking** — single-threaded tic-then-render model from the Phase-1
+- **No locking** — single-threaded tic-then-render model from the foundation
   GameLoop; the read/mutate split is a discipline, not enforced at runtime.
 - Texture composite buffers are kept for the life of the `Textures` object (no
   eviction); fine for vanilla map sizes.
@@ -348,10 +348,9 @@ class World {
   236 nodes / 138 things, full index-range consistency, resolves STARTAN3
   texture + FLOOR4_8 flat + PLAYA1 sprite).
 
-## 9. Notes for the integration phase (files this layer may NOT touch)
+## 9. Integration notes
 
-- `lib/game/doom_game.dart` should construct a `World.fromWad(wad)` and pass
+- `lib/game/doom_game.dart` constructs a `World.fromWad(wad)` and passes
   `world` to both the renderer (`onRender`) and playsim (`onTic`) hooks.
-- No changes were needed to `lib/INTERFACES.md`, `pubspec.yaml`, `main.dart`,
-  or any `engine/{math,wad,video,input,system}` file — this layer builds purely
-  on the existing public APIs.
+- This layer builds purely on the existing public foundation APIs
+  (`lib/INTERFACES.md` and the `engine/{math,wad,video,input,system}` modules).

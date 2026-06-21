@@ -1,4 +1,4 @@
-# flu_doom — Game-State + UI Contracts (Phase 2 / state subsystem)
+# flu_doom — Game-State + UI Contracts
 
 This document is the **stable contract** for the GAME-STATE and UI subsystems
 (`g_game`, `st_stuff`, `hu_stuff`, `am_map`, `m_menu`, `wi_stuff`). The
@@ -166,7 +166,7 @@ returns to `level`.
 3. By state:
    - `level`: Pause key toggles `paused`; then `Automap.responder`
      (Tab toggle + +/-/arrows/f/g). If unconsumed, returns `false` so the
-     input/playsim agent's `G_BuildTiccmd` can use the event.
+     input/playsim layer's `G_BuildTiccmd` can use the event.
    - `intermission`: `Intermission.responder` (key snaps count-up to final,
      next key advances).
    - `finale`: any key returns to the demo screen.
@@ -286,9 +286,10 @@ into a `TicCmd` (this layer does not build tic commands).
 
 ---
 
-## 8. Files this layer did NOT touch
+## 8. Module boundaries
 
-`lib/main.dart`, `lib/game/doom_game.dart`, `lib/INTERFACES.md`,
-`lib/CONTRACTS_WORLD.md`, `lib/game/world/*`, `pubspec.yaml`,
-`lib/ui/controls/`, `lib/ui/settings/`, `lib/game/play/`, `lib/engine/render/`.
-Built purely on the existing public foundation + world APIs.
+This layer is self-contained and depends only on the public foundation +
+world APIs. It does not reach into `lib/main.dart`, `lib/game/doom_game.dart`,
+`lib/INTERFACES.md`, `lib/CONTRACTS_WORLD.md`, `lib/game/world/*`,
+`lib/ui/controls/`, `lib/ui/settings/`, `lib/game/play/`, or
+`lib/engine/render/` — those are wired in by the integration layer.

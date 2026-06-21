@@ -7,7 +7,7 @@ foundation input contracts in `lib/engine/input/*` (see `INTERFACES.md` §10) an
 **never touches ticcmd internals** — it produces `DoomEvent`s and a queryable
 key-state set, the same data vanilla Doom's playsim consumes.
 
-The integration agent mounts the overlay over the game view and routes events.
+The integration layer mounts the overlay over the game view and routes events.
 
 ---
 
@@ -329,7 +329,7 @@ keyboard input.
 
 ---
 
-## 9. Integration checklist (for the integration agent)
+## 9. Integration checklist
 
 1. Create one `EventQueueActionSink(gameQueue)` over the existing game
    `EventQueue` (or use `TouchControlsOverlay.forQueue`).

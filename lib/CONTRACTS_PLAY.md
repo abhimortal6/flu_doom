@@ -1,4 +1,4 @@
-# flu_doom — Play-Simulation Contracts (Phase 2.x)
+# flu_doom — Play-Simulation Contracts
 
 The **play simulation**: a pure-Dart port of the vanilla Doom playsim
 (Chocolate Doom `info.c`, `p_mobj.c`, `p_tick.c`, `p_user.c`, `p_map.c`,
@@ -11,8 +11,7 @@ TicCmd, the renderer-reads / playsim-mutates boundary). It **owns** the
 `mobj_t`/thinker/player types that the world layer left as `Object?`
 (`Sector.thingList`, `Sector.specialData`, `Sector.soundTarget`).
 
-All files live under `lib/game/play/`; tests under `test/play/`. No files
-outside those directories were touched.
+All files live under `lib/game/play/`; tests under `test/play/`.
 
 ---
 
@@ -139,7 +138,7 @@ state vanilla does (`turnHeld` for turn acceleration).
 
 ---
 
-## 4. What is stubbed / deferred (explicitly LATER waves)
+## 4. What is stubbed / deferred
 
 - **Enemy AI A_* functions** (A_Look, A_Chase, A_FaceTarget, all attacks):
   recorded by name in `states[]`; resolve to **log-once no-op stubs** via
@@ -173,7 +172,7 @@ state vanilla does (`turnHeld` for turn acceleration).
   future wiring.
 - **Sound propagation, intercepts/aiming (P_AimLineAttack), teleporters**:
   not implemented. `crossedSpecials` records crossed special lines after a
-  successful move for a later wave to trigger (walkover specials).
+  successful move so walkover specials can be triggered later.
 - **Full info.c tables**: the slice ports the player + weapon (fist/pistol) +
   blood/puff/teleport-fog state chains faithfully (correct vanilla indices),
   plus an idle "spawn" state and a complete `mobjinfo` row for **every
@@ -204,14 +203,14 @@ state vanilla does (`turnHeld` for turn acceleration).
 
 ## 6. SpriteSource adapter (renderer integration)
 
-No `lib/.../CONTRACTS_RENDER.md` / abstract `SpriteSource` existed in the tree
-when this layer was finished (the renderer agent runs concurrently). To avoid
-blocking, `sprite_source.dart` provides a self-contained
-`PlaySpriteSource`/`MobjSprite` view whose fields already match the documented
-renderer needs: `x, y, z` (fixed_t), `angle` (angle_t), `sprite` (SpriteNum),
-`frame` (with FF_FULLBRIGHT) + `baseFrame`/`fullBright`, `flags`, `sector`.
+The play-sim defines its sprite feed independently of the renderer's abstract
+`SpriteSource`, so the two layers are decoupled. `sprite_source.dart` provides a
+self-contained `PlaySpriteSource`/`MobjSprite` view whose fields already match
+the documented renderer needs: `x, y, z` (fixed_t), `angle` (angle_t), `sprite`
+(SpriteNum), `frame` (with FF_FULLBRIGHT) + `baseFrame`/`fullBright`, `flags`,
+`sector`.
 
-**Integration wiring when the renderer publishes its contract:**
+**Integration wiring against the renderer's contract:**
 - If the renderer defines `abstract class SpriteSource` with these getters,
   make `PlaySpriteSource implement SpriteSource` (field set already matches) or
   wrap it in a thin adapter — no playsim changes required.
