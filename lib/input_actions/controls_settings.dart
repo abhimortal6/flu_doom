@@ -51,8 +51,11 @@ class OverlaySettings {
   /// Left/right-handed cluster layout.
   final HandedLayout handed;
 
-  /// Drag-to-look (camera) sensitivity multiplier. 1.0 ≈ vanilla mouse feel;
-  /// higher turns faster per unit of horizontal drag. Sensible range 0.25..4.0.
+  /// Drag-to-look (camera) sensitivity multiplier applied on top of the base
+  /// look gain (`kLookBaseGain` in analog_input.dart). 1.0 = baseline brisk
+  /// feel; higher turns faster per unit of horizontal drag. UI range 0.5..6.0.
+  /// To change the OVERALL feel for everyone, nudge kLookBaseGain instead — this
+  /// slider just scales around that baseline.
   final double lookSensitivity;
 
   /// Optional drag-repositioned button overrides, keyed by overlay button id

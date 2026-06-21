@@ -21,6 +21,29 @@
 
 import 'dart:math' as math;
 
+/// Base drag-to-look gain: how many vanilla `mousex` units one logical pixel of
+/// finger travel is worth, BEFORE the user [lookSensitivity] multiplier.
+///
+/// WHY THIS EXISTS (root-cause fix for "look turn far too slow"):
+/// Vanilla's `mousex = data2*(mouseSensitivity+5)/10` consumes *raw mouse
+/// counts* — a real mouse emits thousands of counts per swipe. A finger drag,
+/// by contrast, is measured in coarse *logical pixels*: a whole-screen swipe is
+/// only a few hundred logical px, and it arrives spread across 3-4 of the 35Hz
+/// tics, so per-tic travel is ~15-30 px. Feeding that 1:1 into `mousex`
+/// (`mousex = px`) made even the 4x slider crawl. This constant amplifies
+/// finger-px into mouse-count-like units so sensitivity 1.0 already feels brisk.
+///
+/// Tuning: `angleturn = px * kLookBaseGain * lookSensitivity * 8` (the *8 is
+/// vanilla `angleturn -= mousex*0x8`). A full 360° turn is 0x4000 (16384) of
+/// summed angleturn. With kLookBaseGain = 3.0 at sensitivity 1.0:
+///   * a gentle ~50px/tic drag  -> mousex 150 -> angleturn 1200 (~26°/tic);
+///   * a fast ~120px/tic flick   -> mousex 360 -> angleturn 2880 (~63°/tic),
+///     so a quick flick whips ~90-180° in 2-3 tics (PUBG-like).
+/// This is the ONE knob to nudge if the on-device feel needs more/less: raise
+/// for faster, lower for slower. The slider (lookSensitivity, 0.5x..6x)
+/// multiplies it.
+const double kLookBaseGain = 3.0;
+
 /// Mutable analog input bag shared between the touch overlay (writer) and the
 /// per-tic key-state bridge (reader). Not threaded; all access is on the UI /
 /// game-loop thread.
@@ -86,18 +109,24 @@ class AnalogInput {
       lookDeltaX != 0.0;
 
   /// Convert the accumulated look delta into a raw vanilla-style `mousex`
-  /// equivalent and clear it. The scaling mirrors g_game.c:
-  ///   `mousex = rawDelta * (mouseSensitivity + 5) / 10`
-  /// with [lookSensitivity] standing in for the user sensitivity (baseline
-  /// 1.0 ≈ Doom default mouseSensitivity 5 -> factor 1.0). The builder then
-  /// applies `angleturn -= mousex * 0x8` exactly as vanilla mouse-look does.
+  /// equivalent and clear it. Touch-adapted scaling:
+  ///   `mousex = rawLogicalPx * kLookBaseGain * lookSensitivity`
+  /// where [kLookBaseGain] bridges coarse finger-logical-pixels into the
+  /// mouse-count-like units vanilla's `mousex` expects (see kLookBaseGain), and
+  /// [lookSensitivity] is the user slider (1.0 = baseline brisk feel). The
+  /// builder then applies `angleturn -= mousex * 0x8` exactly as vanilla
+  /// mouse-look does.
+  ///
+  /// NOTE on truncation: we scale BEFORE truncating, so the base-gain
+  /// amplification happens first — a small per-event/per-tic px count can no
+  /// longer round to zero the way a bare `px * (sens<1)` could.
   ///
   /// Returns an integer `mousex`-like value (truncated toward zero like the C
   /// integer arithmetic).
   int takeMouseX() {
     final double raw = takeLookDeltaX();
     if (raw == 0.0) return 0;
-    final double scaled = raw * lookSensitivity;
+    final double scaled = raw * kLookBaseGain * lookSensitivity;
     // Truncate toward zero (C integer cast semantics).
     return scaled.truncate();
   }
